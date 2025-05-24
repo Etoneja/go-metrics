@@ -1,0 +1,56 @@
+package main
+
+import "sync"
+
+type MemStorage struct {
+	gaugeMu sync.RWMutex
+	gauge   map[string]float64
+
+	counterMu sync.RWMutex
+	counter   map[string]int64
+}
+
+func NewMemStorage() *MemStorage {
+	return &MemStorage{
+		gauge:   make(map[string]float64),
+		counter: make(map[string]int64),
+	}
+}
+
+func (ms *MemStorage) GetGauge(key string) (float64, bool, error) {
+	ms.gaugeMu.RLock()
+	defer ms.gaugeMu.RUnlock()
+	val, ok := ms.gauge[key]
+	return val, ok, nil
+}
+
+func (ms *MemStorage) SetGauge(key string, value float64) error {
+	ms.gaugeMu.Lock()
+	defer ms.gaugeMu.Unlock()
+	ms.gauge[key] = value
+	return nil
+}
+
+func (ms *MemStorage) GetCounter(key string) (int64, bool, error) {
+	ms.counterMu.RLock()
+	defer ms.counterMu.RUnlock()
+	val, ok := ms.counter[key]
+	return val, ok, nil
+}
+
+func (ms *MemStorage) IncrementCounter(key string, value int64) error {
+	_, ok, err := ms.GetCounter(key)
+	if err != nil {
+		return err
+	}
+
+	ms.counterMu.Lock()
+	defer ms.counterMu.Unlock()
+
+	if ok {
+		ms.counter[key] += value
+	} else {
+		ms.counter[key] = value
+	}
+	return nil
+}
