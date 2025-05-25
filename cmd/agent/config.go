@@ -1,11 +1,16 @@
 package main
 
-import "flag"
+import (
+	"flag"
+	"log"
+
+	"github.com/caarlos0/env/v11"
+)
 
 type config struct {
-	ServerEndpoint string
-	PollInterval   uint
-	ReportInterval uint
+	ServerEndpoint string `env:"ADDRESS"`
+	PollInterval   uint   `env:"POLL_INTERVAL"`
+	ReportInterval uint   `env:"REPORT_INTERVAL"`
 }
 
 func normalizeConfig(cfg *config) {
@@ -15,6 +20,7 @@ func normalizeConfig(cfg *config) {
 func prepareConfig() *config {
 	cfg := &config{}
 	parseFlags(cfg)
+	parseEnvOpts(cfg)
 	normalizeConfig(cfg)
 	return cfg
 }
@@ -24,4 +30,11 @@ func parseFlags(cfg *config) {
 	flag.UintVar(&cfg.PollInterval, "p", 2, "poll interval (seconds)")
 	flag.UintVar(&cfg.ReportInterval, "r", 10, "report interval (seconds)")
 	flag.Parse()
+}
+
+func parseEnvOpts(cfg *config) {
+	err := env.Parse(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
