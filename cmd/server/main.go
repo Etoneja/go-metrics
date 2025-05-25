@@ -6,10 +6,16 @@ import (
 )
 
 func main() {
+	cfg := prepareConfig()
+
 	store := NewMemStorage()
 	router := NewRouter(store)
 
-	log.Println("Server start listening on", defaultServerAddress)
+	log.Println("Server start listening on", cfg.ServerAddress)
 
-	http.ListenAndServe(defaultServerAddress, router)
+	err := http.ListenAndServe(cfg.ServerAddress, router)
+	if err != nil {
+		panic(err)
+	}
+
 }
