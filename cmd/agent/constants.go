@@ -5,9 +5,7 @@ const (
 	metricTypeCounter string = "counter"
 )
 
-const defaultPollInterval int = 2
-const defaultReportInterval int = 10
-const defaultServerEndpoint string = "http://localhost:8080"
+const defaultServerEndpointProtocol string = "http"
 
 const semaphoreSize int = 10
 
