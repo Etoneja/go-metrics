@@ -6,19 +6,21 @@ import (
 )
 
 func main() {
+	cfg := prepareConfig()
+
 	log.Println("Service started")
 
-	log.Println("ServerEndpoint", defaultServerEndpoint)
-	log.Println("PollInterval", defaultPollInterval)
-	log.Println("ReportInterval", defaultReportInterval)
+	log.Println("ServerEndpoint", cfg.ServerEndpoint)
+	log.Println("PollInterval", cfg.PollInterval)
+	log.Println("ReportInterval", cfg.ReportInterval)
 
 	stats := newStats()
 
-	pollDuration := time.Second * time.Duration(defaultPollInterval)
+	pollDuration := time.Second * time.Duration(cfg.PollInterval)
 	poller := newPoller(stats, pollDuration)
 
-	reportDuration := time.Second * time.Duration(defaultReportInterval)
-	reporter := NewReporter(stats, defaultServerEndpoint, reportDuration)
+	reportDuration := time.Second * time.Duration(cfg.ReportInterval)
+	reporter := NewReporter(stats, cfg.ServerEndpoint, reportDuration)
 
 	go poller.runRoutine()
 	go reporter.runRoutine()
