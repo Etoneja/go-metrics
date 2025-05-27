@@ -2,11 +2,12 @@ package main
 
 import (
 	"log"
-	"time"
+
+	"github.com/etoneja/go-metrics/internal/agent"
 )
 
 func main() {
-	cfg := prepareConfig()
+	cfg := agent.PrepareConfig()
 
 	log.Println("Service started")
 
@@ -14,16 +15,6 @@ func main() {
 	log.Println("PollInterval", cfg.PollInterval)
 	log.Println("ReportInterval", cfg.ReportInterval)
 
-	stats := newStats()
-
-	pollDuration := time.Second * time.Duration(cfg.PollInterval)
-	poller := newPoller(stats, pollDuration)
-
-	reportDuration := time.Second * time.Duration(cfg.ReportInterval)
-	reporter := NewReporter(stats, cfg.ServerEndpoint, reportDuration)
-
-	go poller.runRoutine()
-	go reporter.runRoutine()
-
-	select {}
+	service := agent.NewService(cfg)
+	service.Run()
 }

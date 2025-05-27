@@ -1,9 +1,4 @@
-package main
-
-const (
-	metricTypeGauge   string = "gauge"
-	metricTypeCounter string = "counter"
-)
+package agent
 
 const defaultServerEndpointProtocol string = "http"
 

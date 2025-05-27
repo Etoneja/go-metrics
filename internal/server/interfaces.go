@@ -1,4 +1,4 @@
-package main
+package server
 
 type Storager interface {
 	GetGauge(key string) (float64, bool, error)

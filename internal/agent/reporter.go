@@ -1,4 +1,4 @@
-package main
+package agent
 
 import (
 	"log"
@@ -84,7 +84,7 @@ func (r *Reporter) runRoutine() {
 	}
 }
 
-func NewReporter(stats *Stats, endpoint string, sleepDuration time.Duration) *Reporter {
+func newReporter(stats *Stats, endpoint string, sleepDuration time.Duration) *Reporter {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}

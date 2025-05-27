@@ -1,4 +1,4 @@
-package main
+package agent
 
 import (
 	"flag"
@@ -17,7 +17,7 @@ func normalizeConfig(cfg *config) {
 	cfg.ServerEndpoint = ensureEndpointProtocol(cfg.ServerEndpoint, defaultServerEndpointProtocol)
 }
 
-func prepareConfig() *config {
+func PrepareConfig() *config {
 	cfg := &config{}
 	parseFlags(cfg)
 	parseEnvOpts(cfg)
