@@ -7,9 +7,9 @@ import (
 
 func main() {
 	store := NewMemStorage()
-	http.HandleFunc("/update/", MetricUpdateHandler(store))
+	router := NewRouter(store)
 
 	log.Println("Server start listening on", defaultServerAddress)
 
-	http.ListenAndServe(defaultServerAddress, nil)
+	http.ListenAndServe(defaultServerAddress, router)
 }

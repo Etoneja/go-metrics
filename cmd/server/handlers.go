@@ -1,28 +1,17 @@
 package main
 
 import (
+	"github.com/go-chi/chi/v5"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
 func MetricUpdateHandler(store Storager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
 
-		url := strings.TrimPrefix(r.URL.Path, "/update/")
-		stringSlice := strings.Split(url, "/")
-		if len(stringSlice) != 3 {
-			http.Error(w, "Not Found", http.StatusNotFound)
-			return
-		}
-
-		metricType := stringSlice[0]
-		metricName := stringSlice[1]
-		metricValue := stringSlice[2]
+		metricType := chi.URLParam(r, "metricType")
+		metricName := chi.URLParam(r, "metricName")
+		metricValue := chi.URLParam(r, "metricValue")
 
 		if metricType == metricTypeGauge {
 			num, err := strconv.ParseFloat(metricValue, 64)
