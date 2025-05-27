@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"flag"
@@ -11,7 +11,7 @@ type config struct {
 	ServerAddress string `env:"ADDRESS"`
 }
 
-func prepareConfig() *config {
+func PrepareConfig() *config {
 	cfg := &config{}
 	parseFlags(cfg)
 	parseEnvOpts(cfg)

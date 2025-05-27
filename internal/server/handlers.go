@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -17,7 +18,7 @@ func MetricUpdateHandler(store Storager) http.HandlerFunc {
 		metricName := chi.URLParam(r, "metricName")
 		metricValue := chi.URLParam(r, "metricValue")
 
-		if metricType == metricTypeGauge {
+		if metricType == common.MetricTypeGauge {
 			num, err := strconv.ParseFloat(metricValue, 64)
 			if err != nil {
 				http.Error(w, "Bad Metric Value", http.StatusBadRequest)
@@ -31,7 +32,7 @@ func MetricUpdateHandler(store Storager) http.HandlerFunc {
 			return
 		}
 
-		if metricType == metricTypeCounter {
+		if metricType == common.MetricTypeCounter {
 			num, err := strconv.ParseInt(metricValue, 10, 64)
 			if err != nil {
 				http.Error(w, "Bad Metric Value", http.StatusBadRequest)
@@ -57,7 +58,7 @@ func MetricGetHandler(store Storager) http.HandlerFunc {
 		metricType := chi.URLParam(r, "metricType")
 		metricName := chi.URLParam(r, "metricName")
 
-		if metricType == metricTypeGauge {
+		if metricType == common.MetricTypeGauge {
 			value, ok, err := store.GetGauge(metricName)
 			if err != nil {
 				http.Error(w, "Internal Error", http.StatusInternalServerError)
@@ -70,7 +71,7 @@ func MetricGetHandler(store Storager) http.HandlerFunc {
 			return
 		}
 
-		if metricType == metricTypeCounter {
+		if metricType == common.MetricTypeCounter {
 			value, ok, err := store.GetCounter(metricName)
 			if err != nil {
 				http.Error(w, "Internal Error", http.StatusInternalServerError)
