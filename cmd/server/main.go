@@ -7,11 +7,11 @@ import (
 
 func main() {
 	store := NewMemStorage()
-	http.HandleFunc("/update/", MetricUpdateHandler(store))
+	router := NewRouter(store)
 
 	log.Println("Server start listening on", defaultServerAddress)
 
-	err := http.ListenAndServe(defaultServerAddress, nil)
+	err := http.ListenAndServe(defaultServerAddress, router)
 	if err != nil {
 		log.Fatalf("Сould not start server: %v", err)
 	}
