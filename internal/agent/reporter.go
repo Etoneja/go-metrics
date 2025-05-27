@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func performRequest(client HTTPClient, url string, wg *sync.WaitGroup) {
+func performRequest(client HTTPDoer, url string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	method := "POST"
@@ -37,7 +37,7 @@ func performRequest(client HTTPClient, url string, wg *sync.WaitGroup) {
 type Reporter struct {
 	stats         *Stats
 	iteration     uint
-	client        HTTPClient
+	client        HTTPDoer
 	endpoint      string
 	sleepDuration time.Duration
 }
