@@ -2,6 +2,6 @@ package agent
 
 import "net/http"
 
-type HTTPClient interface {
+type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
