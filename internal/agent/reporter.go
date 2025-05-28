@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/etoneja/go-metrics/internal/common"
 )
 
 func performRequest(client HTTPDoer, url string, wg *sync.WaitGroup) {
@@ -50,7 +52,7 @@ func (r *Reporter) send(metrics []metric) {
 		semaphore <- struct{}{}
 		wg.Add(1)
 
-		url := buildURL(r.endpoint, "update", m.kind, m.name, m.value)
+		url := buildURL(r.endpoint, "update", m.kind, m.name, common.AnyToString(m.value))
 		go func(url string) {
 			defer func() {
 				<-semaphore
