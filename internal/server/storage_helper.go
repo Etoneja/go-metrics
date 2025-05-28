@@ -14,13 +14,13 @@ type storageHelper struct {
 func (sh *storageHelper) addMetric(metricType string, metricName string, metricValue string) error {
 
 	if metricName == "" {
-		return fmt.Errorf("bad metricName: %w", validationError)
+		return fmt.Errorf("bad metricName: %w", errValidation)
 	}
 
 	if metricType == common.MetricTypeGauge {
 		num, err := strconv.ParseFloat(metricValue, 64)
 		if err != nil {
-			return fmt.Errorf("bad metricValue: %w", validationError)
+			return fmt.Errorf("bad metricValue: %w", errValidation)
 		}
 		err = sh.store.SetGauge(metricName, num)
 		if err != nil {
@@ -32,7 +32,7 @@ func (sh *storageHelper) addMetric(metricType string, metricName string, metricV
 	if metricType == common.MetricTypeCounter {
 		num, err := strconv.ParseInt(metricValue, 10, 64)
 		if err != nil {
-			return fmt.Errorf("bad metricValue: %w", validationError)
+			return fmt.Errorf("bad metricValue: %w", errValidation)
 		}
 		err = sh.store.IncrementCounter(metricName, num)
 		if err != nil {
@@ -40,7 +40,7 @@ func (sh *storageHelper) addMetric(metricType string, metricName string, metricV
 		}
 		return nil
 	}
-	return fmt.Errorf("bad metricType: %w", validationError)
+	return fmt.Errorf("bad metricType: %w", errValidation)
 }
 
 func (sh *storageHelper) getMetric(metricType string, metricName string) (any, error) {
@@ -50,7 +50,7 @@ func (sh *storageHelper) getMetric(metricType string, metricName string) (any, e
 			return nil, err
 		}
 		if !ok {
-			return nil, fmt.Errorf("not found: %w", notFoundError)
+			return nil, fmt.Errorf("not found: %w", errNotFound)
 		}
 
 		return value, nil
@@ -62,12 +62,12 @@ func (sh *storageHelper) getMetric(metricType string, metricName string) (any, e
 			return nil, err
 		}
 		if !ok {
-			return nil, fmt.Errorf("not found: %w", notFoundError)
+			return nil, fmt.Errorf("not found: %w", errNotFound)
 		}
 
 		return value, nil
 	}
-	return nil, fmt.Errorf("bad metricType: %w", validationError)
+	return nil, fmt.Errorf("bad metricType: %w", errValidation)
 }
 
 func (sh *storageHelper) listMetrics() (map[string]any, error) {
