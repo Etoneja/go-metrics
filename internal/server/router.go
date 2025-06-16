@@ -11,6 +11,7 @@ func NewRouter(store Storager) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(LoggerMiddleware(logger.Get()))
+	r.Use(GzipMiddleware)
 
 	r.Get("/", MetricListHandler(store))
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", MetricUpdateHandler(store))
