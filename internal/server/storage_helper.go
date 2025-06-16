@@ -2,45 +2,12 @@ package server
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/etoneja/go-metrics/internal/common"
 )
 
 type storageHelper struct {
 	store Storager
-}
-
-func (sh *storageHelper) addMetric(metricType string, metricName string, metricValue string) error {
-
-	if metricName == "" {
-		return fmt.Errorf("bad metricName: %w", errValidation)
-	}
-
-	if metricType == common.MetricTypeGauge {
-		num, err := strconv.ParseFloat(metricValue, 64)
-		if err != nil {
-			return fmt.Errorf("bad metricValue: %w", errValidation)
-		}
-		err = sh.store.SetGauge(metricName, num)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-
-	if metricType == common.MetricTypeCounter {
-		num, err := strconv.ParseInt(metricValue, 10, 64)
-		if err != nil {
-			return fmt.Errorf("bad metricValue: %w", errValidation)
-		}
-		err = sh.store.IncrementCounter(metricName, num)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-	return fmt.Errorf("bad metricType: %w", errValidation)
 }
 
 func (sh *storageHelper) getMetric(metricType string, metricName string) (any, error) {
