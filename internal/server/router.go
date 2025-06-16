@@ -14,7 +14,9 @@ func NewRouter(store Storager) http.Handler {
 
 	r.Get("/", MetricListHandler(store))
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", MetricUpdateHandler(store))
+	r.Post("/update/", MetricUpdateJSONHandler(store))
 	r.Get("/value/{metricType}/{metricName}", MetricGetHandler(store))
+	r.Post("/value/", MetricGetJSONHandler(store))
 
 	return r
 }
