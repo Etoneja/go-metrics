@@ -1,9 +1,5 @@
 package server
 
-type metricValuer interface {
-	int64 | float64
-}
-
 type Storager interface {
 	GetGauge(key string) (float64, bool, error)
 	ListGauges() (map[string]float64, error)
