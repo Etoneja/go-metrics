@@ -1,24 +1,33 @@
 package agent
 
 import (
+	"bytes"
+	"encoding/json"
 	"log"
 	"net/http"
 	"sync"
 	"time"
 
-	"github.com/etoneja/go-metrics/internal/common"
+	"github.com/etoneja/go-metrics/internal/models"
 )
 
-func performRequest(client HTTPDoer, url string, wg *sync.WaitGroup) {
+func performRequest(client HTTPDoer, endpoint string, metricModel *models.MetricModel, wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	url := buildURL(endpoint, "update/")
+
+	body, err := json.Marshal(metricModel)
+	if err != nil {
+		log.Fatalf("Unexpected error - failed to marshal metric, err=%v", err)
+	}
+
 	method := "POST"
-	req, err := http.NewRequest(method, url, nil)
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
 	if err != nil {
 		log.Fatalf("http.NewRequest failed: method=%s, url=%s, err=%v", method, url, err)
 	}
 
-	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 
@@ -44,7 +53,7 @@ type Reporter struct {
 	sleepDuration time.Duration
 }
 
-func (r *Reporter) send(metrics []metric) {
+func (r *Reporter) send(metrics []*models.MetricModel) {
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, semaphoreSize)
 
@@ -52,14 +61,13 @@ func (r *Reporter) send(metrics []metric) {
 		semaphore <- struct{}{}
 		wg.Add(1)
 
-		url := buildURL(r.endpoint, "update", m.kind, m.name, common.AnyToString(m.value))
-		go func(url string) {
+		go func(m *models.MetricModel) {
 			defer func() {
 				<-semaphore
 			}()
 
-			performRequest(r.client, url, &wg)
-		}(url)
+			performRequest(r.client, r.endpoint, m, &wg)
+		}(m)
 	}
 
 	wg.Wait()
