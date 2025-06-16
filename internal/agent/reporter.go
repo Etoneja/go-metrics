@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -16,17 +17,27 @@ func performRequest(client HTTPDoer, endpoint string, metricModel *models.Metric
 
 	url := buildURL(endpoint, "update/")
 
-	body, err := json.Marshal(metricModel)
+	rawData, err := json.Marshal(metricModel)
 	if err != nil {
 		log.Fatalf("Unexpected error - failed to marshal metric, err=%v", err)
 	}
 
+	var buf bytes.Buffer
+
+	gz := gzip.NewWriter(&buf)
+	_, err = gz.Write(rawData)
+	if err != nil {
+		log.Fatal(err)
+	}
+	gz.Close()
+
 	method := "POST"
-	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
+	req, err := http.NewRequest(method, url, &buf)
 	if err != nil {
 		log.Fatalf("http.NewRequest failed: method=%s, url=%s, err=%v", method, url, err)
 	}
 
+	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
