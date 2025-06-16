@@ -34,11 +34,11 @@ func (ms *MemStorage) ListGauges() (map[string]float64, error) {
 	return res, nil
 }
 
-func (ms *MemStorage) SetGauge(key string, value float64) error {
+func (ms *MemStorage) SetGauge(key string, value float64) (float64, error) {
 	ms.gaugeMu.Lock()
 	defer ms.gaugeMu.Unlock()
 	ms.gauge[key] = value
-	return nil
+	return value, nil
 }
 
 func (ms *MemStorage) GetCounter(key string) (int64, bool, error) {
@@ -58,19 +58,15 @@ func (ms *MemStorage) ListCounters() (map[string]int64, error) {
 	return res, nil
 }
 
-func (ms *MemStorage) IncrementCounter(key string, value int64) error {
-	_, ok, err := ms.GetCounter(key)
-	if err != nil {
-		return err
-	}
-
+func (ms *MemStorage) IncrementCounter(key string, value int64) (int64, error) {
 	ms.counterMu.Lock()
 	defer ms.counterMu.Unlock()
 
+	val, ok := ms.counter[key]
+
 	if ok {
-		ms.counter[key] += value
-	} else {
-		ms.counter[key] = value
+		value += val
 	}
-	return nil
+	ms.counter[key] = value
+	return value, nil
 }
