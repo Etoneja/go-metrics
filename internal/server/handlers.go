@@ -104,29 +104,26 @@ func MetricGetHandler(store Storager) http.HandlerFunc {
 
 func MetricListHandler(store Storager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		helper := &storageHelper{store: store}
 
-		metrics, err := helper.listMetrics()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		metrics := store.GetAll()
 
-		keys := make([]string, 0, len(metrics))
-		for k := range metrics {
-			keys = append(keys, k)
-		}
-
-		sort.Strings(keys)
+		sort.Slice(*metrics, func(i, j int) bool {
+			return (*metrics)[i].ID < (*metrics)[j].ID
+		})
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 
 		fmt.Fprintln(w, "<html><body><pre>")
 
-		for _, k := range keys {
-			v := metrics[k]
-			fmt.Fprintf(w, "%s=%s\n", k, common.AnyToString(v))
+		for _, m := range *metrics {
+			var value string
+			if m.MType == common.MetricTypeCounter {
+				value = common.AnyToString(*m.Delta)
+			} else {
+				value = common.AnyToString(*m.Value)
+			}
+			fmt.Fprintf(w, "%s=%s\n", m.ID, value)
 		}
 
 		fmt.Fprintln(w, "</pre></body></html>")
