@@ -53,12 +53,13 @@ func main() {
 		logger.Get().Info("Received signal",
 			zap.String("signal", sig.String()),
 		)
-		store.ShutDown()
 	case err := <-serverErrChan:
 		logger.Get().Info("Server error",
 			zap.Error(err),
 		)
-		store.ShutDown()
 	}
+
+	store.ShutDown()
+	logger.Get().Info("Server stopped")
 
 }
