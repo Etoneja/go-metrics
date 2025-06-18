@@ -3,17 +3,21 @@ package server
 import (
 	"net/http"
 
+	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 )
 
 func NewRouter(store Storager) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+
+	r.Use(LoggerMiddleware(logger.Get()))
+	r.Use(GzipMiddleware)
 
 	r.Get("/", MetricListHandler(store))
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", MetricUpdateHandler(store))
+	r.Post("/update/", MetricUpdateJSONHandler(store))
 	r.Get("/value/{metricType}/{metricName}", MetricGetHandler(store))
+	r.Post("/value/", MetricGetJSONHandler(store))
 
 	return r
 }

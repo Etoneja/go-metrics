@@ -8,7 +8,10 @@ import (
 )
 
 type config struct {
-	ServerAddress string `env:"ADDRESS"`
+	ServerAddress   string `env:"ADDRESS"`
+	StoreInterval   uint   `env:"STORE_INTERVAL"`
+	FileStoragePath string `env:"FILE_STORAGE_PATH"`
+	Restore         bool   `env:"RESTORE"`
 }
 
 func PrepareConfig() *config {
@@ -20,6 +23,9 @@ func PrepareConfig() *config {
 
 func parseFlags(cfg *config) {
 	flag.StringVar(&cfg.ServerAddress, "a", "localhost:8080", "address and port to start server")
+	flag.UintVar(&cfg.StoreInterval, "i", 300, "store interval (seconds)")
+	flag.StringVar(&cfg.FileStoragePath, "f", "data.json", "data dump file path")
+	flag.BoolVar(&cfg.Restore, "r", false, "restore dump (bool)")
 	flag.Parse()
 }
 

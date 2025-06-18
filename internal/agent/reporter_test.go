@@ -57,7 +57,7 @@ func TestReporter_report(t *testing.T) {
 
 		assert.Equal(t, len(metrics), len(mockCli.requests))
 		for _, req := range mockCli.requests {
-			assert.True(t, strings.HasPrefix(req.URL.Path, "/update"))
+			assert.Equal(t, req.URL.Path, "/update/")
 			assert.Equal(t, http.MethodPost, req.Method)
 		}
 	})

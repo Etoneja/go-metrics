@@ -6,13 +6,8 @@ import (
 	"sync"
 
 	"github.com/etoneja/go-metrics/internal/common"
+	"github.com/etoneja/go-metrics/internal/models"
 )
-
-type metric struct {
-	kind  string
-	name  string
-	value any
-}
 
 func newStats() *Stats {
 	return &Stats{
@@ -43,43 +38,42 @@ func (s *Stats) collect() {
 	s.PollCount++
 }
 
-func (s *Stats) dump() []metric {
+func (s *Stats) dump() []*models.MetricModel {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	metrics := []metric{
-		{kind: common.MetricTypeGauge, name: "Alloc", value: s.memStats.Alloc},
-		{kind: common.MetricTypeGauge, name: "BuckHashSys", value: s.memStats.BuckHashSys},
-		{kind: common.MetricTypeGauge, name: "Frees", value: s.memStats.Frees},
-		{kind: common.MetricTypeGauge, name: "GCCPUFraction", value: s.memStats.GCCPUFraction},
-		{kind: common.MetricTypeGauge, name: "GCSys", value: s.memStats.GCSys},
-		{kind: common.MetricTypeGauge, name: "HeapAlloc", value: s.memStats.HeapAlloc},
-		{kind: common.MetricTypeGauge, name: "HeapIdle", value: s.memStats.HeapIdle},
-		{kind: common.MetricTypeGauge, name: "HeapInuse", value: s.memStats.HeapInuse},
-		{kind: common.MetricTypeGauge, name: "HeapObjects", value: s.memStats.HeapObjects},
-		{kind: common.MetricTypeGauge, name: "HeapReleased", value: s.memStats.HeapReleased},
-		{kind: common.MetricTypeGauge, name: "HeapSys", value: s.memStats.HeapSys},
-		{kind: common.MetricTypeGauge, name: "LastGC", value: s.memStats.LastGC},
-		{kind: common.MetricTypeGauge, name: "Lookups", value: s.memStats.Lookups},
-		{kind: common.MetricTypeGauge, name: "MCacheInuse", value: s.memStats.MCacheInuse},
-		{kind: common.MetricTypeGauge, name: "MCacheSys", value: s.memStats.MCacheSys},
-		{kind: common.MetricTypeGauge, name: "MSpanInuse", value: s.memStats.MSpanInuse},
-		{kind: common.MetricTypeGauge, name: "MSpanSys", value: s.memStats.MSpanSys},
-		{kind: common.MetricTypeGauge, name: "Mallocs", value: s.memStats.Mallocs},
-		{kind: common.MetricTypeGauge, name: "NextGC", value: s.memStats.NextGC},
-		{kind: common.MetricTypeGauge, name: "NumForcedGC", value: s.memStats.NumForcedGC},
-		{kind: common.MetricTypeGauge, name: "NumGC", value: s.memStats.NumGC},
-		{kind: common.MetricTypeGauge, name: "OtherSys", value: s.memStats.OtherSys},
-		{kind: common.MetricTypeGauge, name: "PauseTotalNs", value: s.memStats.PauseTotalNs},
-		{kind: common.MetricTypeGauge, name: "StackInuse", value: s.memStats.StackInuse},
-		{kind: common.MetricTypeGauge, name: "StackSys", value: s.memStats.StackSys},
-		{kind: common.MetricTypeGauge, name: "Sys", value: s.memStats.Sys},
-		{kind: common.MetricTypeGauge, name: "TotalAlloc", value: s.memStats.TotalAlloc},
+	metrics := []*models.MetricModel{
+		models.NewMetricModel("Alloc", common.MetricTypeGauge, 0, float64(s.memStats.Alloc)),
+		models.NewMetricModel("BuckHashSys", common.MetricTypeGauge, 0, float64(s.memStats.BuckHashSys)),
+		models.NewMetricModel("Frees", common.MetricTypeGauge, 0, float64(s.memStats.Frees)),
+		models.NewMetricModel("GCCPUFraction", common.MetricTypeGauge, 0, s.memStats.GCCPUFraction),
+		models.NewMetricModel("GCSys", common.MetricTypeGauge, 0, float64(s.memStats.GCSys)),
+		models.NewMetricModel("HeapAlloc", common.MetricTypeGauge, 0, float64(s.memStats.HeapAlloc)),
+		models.NewMetricModel("HeapIdle", common.MetricTypeGauge, 0, float64(s.memStats.HeapIdle)),
+		models.NewMetricModel("HeapInuse", common.MetricTypeGauge, 0, float64(s.memStats.HeapInuse)),
+		models.NewMetricModel("HeapObjects", common.MetricTypeGauge, 0, float64(s.memStats.HeapObjects)),
+		models.NewMetricModel("HeapReleased", common.MetricTypeGauge, 0, float64(s.memStats.HeapReleased)),
+		models.NewMetricModel("HeapSys", common.MetricTypeGauge, 0, float64(s.memStats.HeapSys)),
+		models.NewMetricModel("LastGC", common.MetricTypeGauge, 0, float64(s.memStats.LastGC)),
+		models.NewMetricModel("Lookups", common.MetricTypeGauge, 0, float64(s.memStats.Lookups)),
+		models.NewMetricModel("MCacheInuse", common.MetricTypeGauge, 0, float64(s.memStats.MCacheInuse)),
+		models.NewMetricModel("MCacheSys", common.MetricTypeGauge, 0, float64(s.memStats.MCacheSys)),
+		models.NewMetricModel("MSpanInuse", common.MetricTypeGauge, 0, float64(s.memStats.MSpanInuse)),
+		models.NewMetricModel("MSpanSys", common.MetricTypeGauge, 0, float64(s.memStats.MSpanSys)),
+		models.NewMetricModel("Mallocs", common.MetricTypeGauge, 0, float64(s.memStats.Mallocs)),
+		models.NewMetricModel("NextGC", common.MetricTypeGauge, 0, float64(s.memStats.NextGC)),
+		models.NewMetricModel("NumForcedGC", common.MetricTypeGauge, 0, float64(s.memStats.NumForcedGC)),
+		models.NewMetricModel("NumGC", common.MetricTypeGauge, 0, float64(s.memStats.NumGC)),
+		models.NewMetricModel("OtherSys", common.MetricTypeGauge, 0, float64(s.memStats.OtherSys)),
+		models.NewMetricModel("PauseTotalNs", common.MetricTypeGauge, 0, float64(s.memStats.PauseTotalNs)),
+		models.NewMetricModel("StackInuse", common.MetricTypeGauge, 0, float64(s.memStats.StackInuse)),
+		models.NewMetricModel("StackSys", common.MetricTypeGauge, 0, float64(s.memStats.StackSys)),
+		models.NewMetricModel("Sys", common.MetricTypeGauge, 0, float64(s.memStats.Sys)),
+		models.NewMetricModel("TotalAlloc", common.MetricTypeGauge, 0, float64(s.memStats.TotalAlloc)),
 
-		{kind: common.MetricTypeGauge, name: "RandomValue", value: s.RandomValue},
+		models.NewMetricModel("RandomValue", common.MetricTypeGauge, 0, float64(s.RandomValue)),
 
-		// NOTE: Should we send global counter of diff since last report?
-		{kind: common.MetricTypeCounter, name: "PollCount", value: s.PollCount},
+		models.NewMetricModel("PollCount", common.MetricTypeCounter, int64(s.PollCount), 0),
 	}
 	return metrics
 }
