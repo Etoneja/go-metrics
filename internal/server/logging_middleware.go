@@ -1,7 +1,6 @@
 package server
 
 import (
-	"mime"
 	"net/http"
 	"time"
 
@@ -27,23 +26,6 @@ func (r *loggingResponseWriter) Write(b []byte) (int, error) {
 func (r *loggingResponseWriter) WriteHeader(statusCode int) {
 	r.ResponseWriter.WriteHeader(statusCode)
 	r.responseData.status = statusCode
-}
-
-var compressibleTypes = map[string]bool{
-	"application/json": true,
-	"text/html":        true,
-}
-
-func isCompressibleContentType(contentType string) bool {
-	mimeType, _, err := mime.ParseMediaType(contentType)
-	if err != nil {
-		return false
-	}
-	res, ok := compressibleTypes[mimeType]
-	if !ok {
-		res = false
-	}
-	return res
 }
 
 func LoggerMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
