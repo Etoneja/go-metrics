@@ -1,54 +1,68 @@
 package server
 
 import (
-	"bytes"
 	"compress/gzip"
-	"log"
+	"fmt"
+	"mime"
 	"net/http"
 	"strings"
 )
 
-type bufferedResponseWriter struct {
+var compressibleTypes = map[string]bool{
+	"application/json": true,
+	"text/html":        true,
+}
+
+func isCompressibleContentType(contentType string) bool {
+	mimeType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return false
+	}
+	res, ok := compressibleTypes[mimeType]
+	if !ok {
+		res = false
+	}
+	return res
+}
+
+type gzipResponseWriter struct {
 	http.ResponseWriter
-	buf         *bytes.Buffer
-	statusCode  int
-	wroteHeader bool
-	headers     http.Header
+	gz       *gzip.Writer
+	compress bool
 }
 
-func (w *bufferedResponseWriter) Write(data []byte) (int, error) {
-	if !w.wroteHeader {
-		w.WriteHeader(http.StatusOK)
+func (w *gzipResponseWriter) WriteHeader(statusCode int) {
+	contentType := w.Header().Get("Content-Type")
+	if isCompressibleContentType(contentType) {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Del("Content-Length")
+		w.compress = true
 	}
-	return w.buf.Write(data)
+	w.ResponseWriter.WriteHeader(statusCode)
 }
 
-func (w *bufferedResponseWriter) WriteHeader(statusCode int) {
-	if !w.wroteHeader {
-		w.statusCode = statusCode
-		w.wroteHeader = true
+func (w *gzipResponseWriter) Write(b []byte) (int, error) {
+	if w.compress {
+		if w.gz == nil {
+			gz, err := gzip.NewWriterLevel(w.ResponseWriter, gzip.BestSpeed)
+			if err != nil {
+				return 0, err
+			}
+			w.gz = gz
+		}
+		return w.gz.Write(b)
 	}
+	return w.ResponseWriter.Write(b)
 }
 
-func (w *bufferedResponseWriter) writeHeaders() {
-	if !w.wroteHeader {
-		w.WriteHeader(http.StatusOK)
-	}
-
-	for key, values := range w.headers {
-		for _, value := range values {
-			w.ResponseWriter.Header().Set(key, value)
+func (w *gzipResponseWriter) Close() error {
+	if w.gz != nil {
+		err := w.gz.Close()
+		if err != nil {
+			return fmt.Errorf("failed to close gzip writer: %w", err)
 		}
 	}
-
-	w.ResponseWriter.WriteHeader(w.statusCode)
-}
-
-func (w *bufferedResponseWriter) Flush() {
-	w.writeHeaders()
-	if w.buf.Len() > 0 {
-		w.ResponseWriter.Write(w.buf.Bytes())
-	}
+	return nil
 }
 
 func GzipMiddleware(next http.Handler) http.Handler {
@@ -68,50 +82,9 @@ func GzipMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if w.Header().Get("Content-Encoding") == "gzip" {
-			next.ServeHTTP(w, r)
-			return
-		}
+		gzw := gzipResponseWriter{ResponseWriter: w}
+		defer gzw.Close()
 
-		var buf bytes.Buffer
-		bw := &bufferedResponseWriter{
-			ResponseWriter: w,
-			buf:            &buf,
-		}
-
-		bw.Header().Set("Vary", "Accept-Encoding")
-
-		next.ServeHTTP(bw, r)
-
-		contentType := bw.Header().Get("Content-Type")
-		if !isCompressibleContentType(contentType) {
-			bw.Flush()
-			return
-		}
-
-		// if buf.Len() < 1400 {
-		//     bw.Flush()
-		//     return
-		// }
-
-		w.Header().Set("Content-Encoding", "gzip")
-		w.Header().Del("Content-Length")
-
-		bw.writeHeaders()
-
-		gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
-		if err != nil {
-			log.Printf("Failed to create gzip writer: %v", err)
-			bw.Flush()
-			return
-		}
-		defer gz.Close()
-
-		_, err = gz.Write(buf.Bytes())
-		if err != nil {
-			log.Printf("Gzip write error: %v", err)
-			http.Error(w, "Compression failed", http.StatusInternalServerError)
-			return
-		}
+		next.ServeHTTP(&gzw, r)
 	})
 }
