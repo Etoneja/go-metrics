@@ -66,39 +66,29 @@ func MetricGetHandler(store Storager) http.HandlerFunc {
 		metricType := chi.URLParam(r, "metricType")
 		metricName := chi.URLParam(r, "metricName")
 
-		if metricType == common.MetricTypeGauge {
-			value, ok, err := store.GetGauge(metricName)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if !ok {
-				http.Error(w, "Not found", http.StatusNotFound)
-				return
-			}
+		var value any
+		var err error
+		var ok bool
 
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, "%v", value)
-			return
-
-		} else if metricType == common.MetricTypeCounter {
-			value, ok, err := store.GetCounter(metricName)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if !ok {
-				http.Error(w, "Not found", http.StatusNotFound)
-				return
-			}
-
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, "%v", value)
+		switch metricType {
+		case common.MetricTypeGauge:
+			value, ok, err = store.GetGauge(metricName)
+		case common.MetricTypeCounter:
+			value, ok, err = store.GetCounter(metricName)
+		default:
+			http.Error(w, "Bad Request: bad metric type", http.StatusBadRequest)
 			return
 		}
-
-		http.Error(w, "Bad Request: bad metric type", http.StatusBadRequest)
-
+		if !ok {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "%v", value)
 	}
 }
 
@@ -136,15 +126,8 @@ func MetricUpdateJSONHandler(store Storager) http.HandlerFunc {
 
 		var metricModelRequest models.MetricModel
 		var metricModelResponse models.MetricModel
-		var buf bytes.Buffer
 
-		_, err := buf.ReadFrom(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		if err = json.Unmarshal(buf.Bytes(), &metricModelRequest); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&metricModelRequest); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
