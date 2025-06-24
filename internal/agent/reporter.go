@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -12,14 +15,14 @@ import (
 	"github.com/etoneja/go-metrics/internal/models"
 )
 
-func performRequest(client HTTPDoer, endpoint string, metricModel *models.MetricModel, wg *sync.WaitGroup) {
+func performRequest(client HTTPDoer, endpoint string, metricModel *models.MetricModel, wg *sync.WaitGroup) error {
 	defer wg.Done()
 
 	url := buildURL(endpoint, "update/")
 
 	rawData, err := json.Marshal(metricModel)
 	if err != nil {
-		log.Fatalf("Unexpected error - failed to marshal metric, err=%v", err)
+		return fmt.Errorf("unexpected error - failed to marshal metric: %w", err)
 	}
 
 	var buf bytes.Buffer
@@ -27,14 +30,15 @@ func performRequest(client HTTPDoer, endpoint string, metricModel *models.Metric
 	gz := gzip.NewWriter(&buf)
 	_, err = gz.Write(rawData)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("unexpected error - failed to write gzip: %w", err)
 	}
 	gz.Close()
 
 	method := "POST"
 	req, err := http.NewRequest(method, url, &buf)
 	if err != nil {
-		log.Fatalf("http.NewRequest failed: method=%s, url=%s, err=%v", method, url, err)
+		log.Printf("http.NewRequest failed: method=%s, url=%s, err=%v", method, url, err)
+		return fmt.Errorf("unexpected error - failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Encoding", "gzip")
@@ -44,16 +48,20 @@ func performRequest(client HTTPDoer, endpoint string, metricModel *models.Metric
 
 	if err != nil {
 		log.Printf("failed to request %s: %v", url, err)
-		return
+		return fmt.Errorf("unexpected error - failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("non-OK status code for %s: %d", url, resp.StatusCode)
-		return
+		return errors.New("bad status")
 	}
 
 	log.Printf("Request to %s succeeded", url)
+	return nil
 }
 
 type Reporter struct {
@@ -77,7 +85,10 @@ func (r *Reporter) send(metrics []*models.MetricModel) {
 				<-semaphore
 			}()
 
-			performRequest(r.client, r.endpoint, m, &wg)
+			err := performRequest(r.client, r.endpoint, m, &wg)
+			if err != nil {
+				log.Printf("Error occurred sending metric %s: %v", m.ID, err)
+			}
 		}(m)
 	}
 
