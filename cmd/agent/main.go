@@ -1,19 +1,22 @@
 package main
 
 import (
-	"log"
-
 	"github.com/etoneja/go-metrics/internal/agent"
+	"github.com/etoneja/go-metrics/internal/logger"
+	"go.uber.org/zap"
 )
 
 func main() {
 	cfg := agent.PrepareConfig()
 
-	log.Println("Agent started")
+	logger.Init(false)
+	defer logger.Sync()
 
-	log.Println("ServerEndpoint", cfg.ServerEndpoint)
-	log.Println("PollInterval", cfg.PollInterval)
-	log.Println("ReportInterval", cfg.ReportInterval)
+	logger.Get().Info("Agent started",
+		zap.String("ServerEndpoint", cfg.ServerEndpoint),
+		zap.Uint("PollInterval", cfg.PollInterval),
+		zap.Uint("ReportInterval", cfg.ReportInterval),
+	)
 
 	service := agent.NewService(cfg)
 	service.Run()

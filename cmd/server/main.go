@@ -1,23 +1,65 @@
 package main
 
 import (
-	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 
+	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/etoneja/go-metrics/internal/server"
+	"go.uber.org/zap"
 )
 
 func main() {
 	cfg := server.PrepareConfig()
 
-	store := server.NewMemStorage()
+	logger.Init(false)
+	defer logger.Sync()
+
+	storageConfig := &server.StorageConfig{
+		StoreInterval:   cfg.StoreInterval,
+		FileStoragePath: cfg.FileStoragePath,
+		Restore:         cfg.Restore,
+	}
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	serverErrChan := make(chan error, 1)
+
+	store := server.NewMemStorageFromStorageConfig(storageConfig)
 	router := server.NewRouter(store)
 
-	log.Println("Server start listening on", cfg.ServerAddress)
+	logger.Get().Info("Server started",
+		zap.String("ServerAddress", cfg.ServerAddress),
+		zap.Uint("StoreInterval", cfg.StoreInterval),
+		zap.String("FileStoragePath", cfg.FileStoragePath),
+		zap.Bool("Restore", cfg.Restore),
+	)
 
-	err := http.ListenAndServe(cfg.ServerAddress, router)
-	if err != nil {
-		log.Fatalf("Сould not start server: %v", err)
+	go func() {
+		err := http.ListenAndServe(cfg.ServerAddress, router)
+		if err != nil {
+			logger.Get().Error("Server failed",
+				zap.Error(err),
+			)
+			serverErrChan <- err
+		}
+	}()
+
+	select {
+	case sig := <-signalChan:
+		logger.Get().Info("Received signal",
+			zap.String("signal", sig.String()),
+		)
+	case err := <-serverErrChan:
+		logger.Get().Info("Server error",
+			zap.Error(err),
+		)
 	}
+
+	store.ShutDown()
+	logger.Get().Info("Server stopped")
 
 }
