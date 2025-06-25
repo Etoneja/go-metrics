@@ -1,39 +1,67 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sync"
 	"time"
 
-	"github.com/etoneja/go-metrics/internal/common"
+	"github.com/etoneja/go-metrics/internal/models"
 )
 
-func performRequest(client HTTPDoer, url string, wg *sync.WaitGroup) {
+func performRequest(client HTTPDoer, endpoint string, metricModel *models.MetricModel, wg *sync.WaitGroup) error {
 	defer wg.Done()
 
-	method := "POST"
-	req, err := http.NewRequest(method, url, nil)
+	url := buildURL(endpoint, "update/")
+
+	rawData, err := json.Marshal(metricModel)
 	if err != nil {
-		log.Fatalf("http.NewRequest failed: method=%s, url=%s, err=%v", method, url, err)
+		return fmt.Errorf("unexpected error - failed to marshal metric: %w", err)
 	}
 
-	req.Header.Set("Content-Type", "text/plain")
+	var buf bytes.Buffer
+
+	gz := gzip.NewWriter(&buf)
+	_, err = gz.Write(rawData)
+	if err != nil {
+		return fmt.Errorf("unexpected error - failed to write gzip: %w", err)
+	}
+	gz.Close()
+
+	method := "POST"
+	req, err := http.NewRequest(method, url, &buf)
+	if err != nil {
+		log.Printf("http.NewRequest failed: method=%s, url=%s, err=%v", method, url, err)
+		return fmt.Errorf("unexpected error - failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 
 	if err != nil {
 		log.Printf("failed to request %s: %v", url, err)
-		return
+		return fmt.Errorf("unexpected error - failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("non-OK status code for %s: %d", url, resp.StatusCode)
-		return
+		return errors.New("bad status")
 	}
 
 	log.Printf("Request to %s succeeded", url)
+	return nil
 }
 
 type Reporter struct {
@@ -44,7 +72,7 @@ type Reporter struct {
 	sleepDuration time.Duration
 }
 
-func (r *Reporter) send(metrics []metric) {
+func (r *Reporter) send(metrics []*models.MetricModel) {
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, semaphoreSize)
 
@@ -52,14 +80,16 @@ func (r *Reporter) send(metrics []metric) {
 		semaphore <- struct{}{}
 		wg.Add(1)
 
-		url := buildURL(r.endpoint, "update", m.kind, m.name, common.AnyToString(m.value))
-		go func(url string) {
+		go func(m *models.MetricModel) {
 			defer func() {
 				<-semaphore
 			}()
 
-			performRequest(r.client, url, &wg)
-		}(url)
+			err := performRequest(r.client, r.endpoint, m, &wg)
+			if err != nil {
+				log.Printf("Error occurred sending metric %s: %v", m.ID, err)
+			}
+		}(m)
 	}
 
 	wg.Wait()
