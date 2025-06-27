@@ -28,17 +28,17 @@ func (m *mockClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 func TestReporter_report(t *testing.T) {
-	fakeDuration := time.Duration(time.Millisecond)
+	fakeReportInterval := time.Duration(time.Millisecond)
 	fakeEndpoint := "http://fake.com/"
 	stats := newStats()
 
 	mockCli := &mockClient{}
 	t.Run("test report", func(t *testing.T) {
 		r := &Reporter{
-			stats:         stats,
-			client:        mockCli,
-			endpoint:      fakeEndpoint,
-			sleepDuration: fakeDuration,
+			stats:          stats,
+			client:         mockCli,
+			endpoint:       fakeEndpoint,
+			reportInterval: fakeReportInterval,
 		}
 		assert.Equal(t, uint(0), r.iteration)
 
