@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -154,9 +155,9 @@ func (ms *MemStorage) Dump() error {
 }
 
 func (ms *MemStorage) dump() error {
-    if !ms.dumpInProgress.CompareAndSwap(false, true) {
-        return fmt.Errorf("dump already in progress")
-    }
+	if !ms.dumpInProgress.CompareAndSwap(false, true) {
+		return fmt.Errorf("dump already in progress")
+	}
 
 	defer func() {
 		ms.dumpInProgress.Store(false)
@@ -174,7 +175,7 @@ func (ms *MemStorage) dump() error {
 	defer func() {
 		file.Close()
 		if err != nil {
-			os.Remove(tmpPath) 
+			os.Remove(tmpPath)
 		}
 	}()
 
@@ -186,10 +187,10 @@ func (ms *MemStorage) dump() error {
 		return fmt.Errorf("failed to encode metrics: %w", err)
 	}
 
-    err = file.Sync()
+	err = file.Sync()
 	if err != nil {
-        return fmt.Errorf("failed to sync file: %w", err)
-    }
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
 
 	err = os.Rename(tmpPath, ms.filePath)
 	if err != nil {
@@ -279,4 +280,8 @@ func (ms *MemStorage) ShutDown() {
 		<-ms.doneChan
 	}
 	log.Println("MemStorage shutdowned")
+}
+
+func (ms *MemStorage) Ping(ctx context.Context) error {
+	return nil
 }
