@@ -98,7 +98,11 @@ func MetricGetHandler(store Storager) http.HandlerFunc {
 func MetricListHandler(store Storager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		metrics := store.GetAll()
+		metrics, err := store.GetAll()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 
 		sort.Slice(*metrics, func(i, j int) bool {
 			return (*metrics)[i].ID < (*metrics)[j].ID

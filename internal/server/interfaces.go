@@ -11,7 +11,7 @@ type Storager interface {
 	SetGauge(key string, value float64) (float64, error)
 	GetCounter(key string) (int64, bool, error)
 	IncrementCounter(key string, value int64) (int64, error)
-	GetAll() *[]models.MetricModel
+	GetAll() (*[]models.MetricModel, error)
 
 	Ping(ctx context.Context) error
 	ShutDown()
