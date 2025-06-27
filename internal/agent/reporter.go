@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -65,11 +66,11 @@ func performRequest(client HTTPDoer, endpoint string, metricModel *models.Metric
 }
 
 type Reporter struct {
-	stats         *Stats
-	iteration     uint
-	client        HTTPDoer
-	endpoint      string
-	sleepDuration time.Duration
+	stats          *Stats
+	iteration      uint
+	client         HTTPDoer
+	endpoint       string
+	reportInterval time.Duration
 }
 
 func (r *Reporter) send(metrics []*models.MetricModel) {
@@ -109,21 +110,28 @@ func (r *Reporter) report() {
 	log.Println("Report - finish iteration", r.iteration)
 }
 
-func (r *Reporter) runRoutine() {
+func (r *Reporter) runRoutine(ctx context.Context) error {
+	ticker := time.NewTicker(time.Duration(r.reportInterval))
+	defer ticker.Stop()
+
 	for {
-		r.report()
-		time.Sleep(r.sleepDuration)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			r.report()
+		}
 	}
 }
 
-func newReporter(stats *Stats, endpoint string, sleepDuration time.Duration) *Reporter {
+func newReporter(stats *Stats, endpoint string, reportInterval time.Duration) *Reporter {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 	return &Reporter{
-		stats:         stats,
-		client:        client,
-		endpoint:      endpoint,
-		sleepDuration: sleepDuration,
+		stats:          stats,
+		client:         client,
+		endpoint:       endpoint,
+		reportInterval: reportInterval,
 	}
 }
