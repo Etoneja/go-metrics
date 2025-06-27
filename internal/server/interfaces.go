@@ -1,6 +1,10 @@
 package server
 
-import "github.com/etoneja/go-metrics/internal/models"
+import (
+	"context"
+
+	"github.com/etoneja/go-metrics/internal/models"
+)
 
 type Storager interface {
 	GetGauge(key string) (float64, bool, error)
@@ -8,4 +12,7 @@ type Storager interface {
 	GetCounter(key string) (int64, bool, error)
 	IncrementCounter(key string, value int64) (int64, error)
 	GetAll() *[]models.MetricModel
+
+	Ping(ctx context.Context) error
+	ShutDown()
 }

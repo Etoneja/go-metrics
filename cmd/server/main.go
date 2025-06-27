@@ -17,18 +17,25 @@ func main() {
 	logger.Init(false)
 	defer logger.Sync()
 
-	storageConfig := &server.StorageConfig{
-		StoreInterval:   cfg.StoreInterval,
-		FileStoragePath: cfg.FileStoragePath,
-		Restore:         cfg.Restore,
-	}
-
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	serverErrChan := make(chan error, 1)
 
-	store := server.NewMemStorageFromStorageConfig(storageConfig)
+	var store server.Storager
+	if cfg.DatabaseDSN == "" {
+		logger.Get().Info("Init memstorage")
+		storageConfig := &server.StorageConfig{
+			StoreInterval:   cfg.StoreInterval,
+			FileStoragePath: cfg.FileStoragePath,
+			Restore:         cfg.Restore,
+		}
+		store = server.NewMemStorageFromStorageConfig(storageConfig)
+	} else {
+		logger.Get().Info("Init dbstorage")
+		store = server.NewDBStorage(cfg.DatabaseDSN)
+	}
+
 	router := server.NewRouter(store)
 
 	logger.Get().Info("Server started",
