@@ -154,7 +154,7 @@ func (dbs *DBStorage) IncrementCounter(key string, value int64) (int64, error) {
 	return newvalue, nil
 }
 
-func (dbs *DBStorage) GetAll() (*[]models.MetricModel, error) {
+func (dbs *DBStorage) GetAll() ([]models.MetricModel, error) {
 	ctx := context.Background()
 
 	rows, err := dbs.pool.Query(ctx, "select id, delta, value from metrics;")
@@ -195,7 +195,7 @@ func (dbs *DBStorage) GetAll() (*[]models.MetricModel, error) {
 		return metrics[i].ID < metrics[j].ID
 	})
 
-	return &metrics, nil
+	return metrics, nil
 
 }
 
@@ -209,11 +209,11 @@ func (dbs *DBStorage) Ping(ctx context.Context) error {
 	return err
 }
 
-func (dbs *DBStorage) BatchUpdate(metrics *[]models.MetricModel) (*[]models.MetricModel, error) {
-	newMetrics := make([]models.MetricModel, 0, len(*metrics))
+func (dbs *DBStorage) BatchUpdate(metrics []models.MetricModel) ([]models.MetricModel, error) {
+	newMetrics := make([]models.MetricModel, 0, len(metrics))
 
-	metricsCopy := make([]models.MetricModel, len(*metrics))
-	copy(metricsCopy, *metrics)
+	metricsCopy := make([]models.MetricModel, len(metrics))
+	copy(metricsCopy, metrics)
 	sort.Slice(metricsCopy, func(i, j int) bool {
 		return metricsCopy[i].ID < metricsCopy[j].ID
 	})
@@ -265,5 +265,5 @@ func (dbs *DBStorage) BatchUpdate(metrics *[]models.MetricModel) (*[]models.Metr
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return &newMetrics, nil
+	return newMetrics, nil
 }

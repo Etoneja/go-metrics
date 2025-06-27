@@ -114,7 +114,7 @@ func (bh *BaseHandler) MetricListHandler() http.HandlerFunc {
 
 		fmt.Fprintln(w, "<html><body><pre>")
 
-		for _, m := range *metrics {
+		for _, m := range metrics {
 			var value string
 			if m.MType == common.MetricTypeCounter {
 				value = common.AnyToString(*m.Delta)
@@ -282,7 +282,7 @@ func (bh *BaseHandler) MetricBatchUpdateJSONHandler() http.HandlerFunc {
 			return
 		}
 
-		newMetrics, err := bh.store.BatchUpdate(&metricModelsRequest)
+		newMetrics, err := bh.store.BatchUpdate(metricModelsRequest)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
