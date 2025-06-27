@@ -65,26 +65,30 @@ func (w *gzipResponseWriter) Close() error {
 	return nil
 }
 
-func GzipMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
-			gz, err := gzip.NewReader(r.Body)
-			if err != nil {
-				http.Error(w, "Invalid gzip body", http.StatusBadRequest)
+func (bmw *BaseMiddleware) GzipMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		logFn := func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
+				gz, err := gzip.NewReader(r.Body)
+				if err != nil {
+					http.Error(w, "Invalid gzip body", http.StatusBadRequest)
+					return
+				}
+				defer gz.Close()
+				r.Body = gz
+			}
+
+			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+				next.ServeHTTP(w, r)
 				return
 			}
-			defer gz.Close()
-			r.Body = gz
+
+			gzw := gzipResponseWriter{ResponseWriter: w}
+			defer gzw.Close()
+
+			next.ServeHTTP(&gzw, r)
 		}
 
-		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		gzw := gzipResponseWriter{ResponseWriter: w}
-		defer gzw.Close()
-
-		next.ServeHTTP(&gzw, r)
-	})
+		return http.HandlerFunc(logFn)
+	}
 }
