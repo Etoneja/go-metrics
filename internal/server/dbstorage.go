@@ -90,9 +90,7 @@ func (dbs *DBStorage) runMigrations(ctx context.Context) error {
 
 }
 
-func (dbs *DBStorage) GetGauge(key string) (float64, bool, error) {
-	ctx := context.Background()
-
+func (dbs *DBStorage) GetGauge(ctx context.Context, key string) (float64, bool, error) {
 	row := dbs.pool.QueryRow(ctx, querySelectGauge, key)
 
 	var value sql.NullFloat64
@@ -109,9 +107,7 @@ func (dbs *DBStorage) GetGauge(key string) (float64, bool, error) {
 	return value.Float64, true, nil
 }
 
-func (dbs *DBStorage) SetGauge(key string, value float64) (float64, error) {
-	ctx := context.Background()
-
+func (dbs *DBStorage) SetGauge(ctx context.Context, key string, value float64) (float64, error) {
 	row := dbs.pool.QueryRow(ctx, queryInsertGauge, key, value)
 
 	var newvalue float64
@@ -122,9 +118,7 @@ func (dbs *DBStorage) SetGauge(key string, value float64) (float64, error) {
 	return newvalue, nil
 }
 
-func (dbs *DBStorage) GetCounter(key string) (int64, bool, error) {
-	ctx := context.Background()
-
+func (dbs *DBStorage) GetCounter(ctx context.Context, key string) (int64, bool, error) {
 	row := dbs.pool.QueryRow(ctx, querySelectCounter, key)
 
 	var value sql.NullInt64
@@ -141,9 +135,7 @@ func (dbs *DBStorage) GetCounter(key string) (int64, bool, error) {
 	return value.Int64, true, nil
 }
 
-func (dbs *DBStorage) IncrementCounter(key string, value int64) (int64, error) {
-	ctx := context.Background()
-
+func (dbs *DBStorage) IncrementCounter(ctx context.Context, key string, value int64) (int64, error) {
 	row := dbs.pool.QueryRow(ctx, queryInsertCounter, key, value)
 
 	var newvalue int64
@@ -154,9 +146,7 @@ func (dbs *DBStorage) IncrementCounter(key string, value int64) (int64, error) {
 	return newvalue, nil
 }
 
-func (dbs *DBStorage) GetAll() ([]models.MetricModel, error) {
-	ctx := context.Background()
-
+func (dbs *DBStorage) GetAll(ctx context.Context) ([]models.MetricModel, error) {
 	rows, err := dbs.pool.Query(ctx, "select id, delta, value from metrics;")
 
 	if err != nil {
@@ -209,7 +199,7 @@ func (dbs *DBStorage) Ping(ctx context.Context) error {
 	return err
 }
 
-func (dbs *DBStorage) BatchUpdate(metrics []models.MetricModel) ([]models.MetricModel, error) {
+func (dbs *DBStorage) BatchUpdate(ctx context.Context, metrics []models.MetricModel) ([]models.MetricModel, error) {
 	newMetrics := make([]models.MetricModel, 0, len(metrics))
 
 	metricsCopy := make([]models.MetricModel, len(metrics))
@@ -218,7 +208,6 @@ func (dbs *DBStorage) BatchUpdate(metrics []models.MetricModel) ([]models.Metric
 		return metricsCopy[i].ID < metricsCopy[j].ID
 	})
 
-	ctx := context.Background()
 	tx, err := dbs.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)

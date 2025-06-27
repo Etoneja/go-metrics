@@ -2,13 +2,11 @@ package server
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/models"
@@ -33,13 +31,15 @@ func (bh *BaseHandler) MetricUpdateHandler() http.HandlerFunc {
 			return
 		}
 
+		ctx := r.Context()
+
 		if metricType == common.MetricTypeGauge {
 			num, err := strconv.ParseFloat(metricValue, 64)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			_, err = bh.store.SetGauge(metricName, num)
+			_, err = bh.store.SetGauge(ctx, metricName, num)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -51,7 +51,7 @@ func (bh *BaseHandler) MetricUpdateHandler() http.HandlerFunc {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			_, err = bh.store.IncrementCounter(metricName, num)
+			_, err = bh.store.IncrementCounter(ctx, metricName, num)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -78,11 +78,13 @@ func (bh *BaseHandler) MetricGetHandler() http.HandlerFunc {
 		var err error
 		var ok bool
 
+		ctx := r.Context()
+
 		switch metricType {
 		case common.MetricTypeGauge:
-			value, ok, err = bh.store.GetGauge(metricName)
+			value, ok, err = bh.store.GetGauge(ctx, metricName)
 		case common.MetricTypeCounter:
-			value, ok, err = bh.store.GetCounter(metricName)
+			value, ok, err = bh.store.GetCounter(ctx, metricName)
 		default:
 			http.Error(w, "Bad Request: bad metric type", http.StatusBadRequest)
 			return
@@ -103,7 +105,9 @@ func (bh *BaseHandler) MetricGetHandler() http.HandlerFunc {
 func (bh *BaseHandler) MetricListHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		metrics, err := bh.store.GetAll()
+		ctx := r.Context()
+
+		metrics, err := bh.store.GetAll(ctx)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -145,13 +149,15 @@ func (bh *BaseHandler) MetricUpdateJSONHandler() http.HandlerFunc {
 			return
 		}
 
+		ctx := r.Context()
+
 		if metricModelRequest.MType == common.MetricTypeGauge {
 			if metricModelRequest.Value == nil {
 				http.Error(w, "Bad Request: missing value", http.StatusBadRequest)
 				return
 			}
 
-			newValue, err := bh.store.SetGauge(metricModelRequest.ID, *metricModelRequest.Value)
+			newValue, err := bh.store.SetGauge(ctx, metricModelRequest.ID, *metricModelRequest.Value)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -165,7 +171,7 @@ func (bh *BaseHandler) MetricUpdateJSONHandler() http.HandlerFunc {
 				return
 			}
 
-			newValue, err := bh.store.IncrementCounter(metricModelRequest.ID, *metricModelRequest.Delta)
+			newValue, err := bh.store.IncrementCounter(ctx, metricModelRequest.ID, *metricModelRequest.Delta)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -210,8 +216,10 @@ func (bh *BaseHandler) MetricGetJSONHandler() http.HandlerFunc {
 			return
 		}
 
+		ctx := r.Context()
+
 		if metricGetRequestModel.MType == common.MetricTypeGauge {
-			value, ok, err := bh.store.GetGauge(metricGetRequestModel.ID)
+			value, ok, err := bh.store.GetGauge(ctx, metricGetRequestModel.ID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -224,7 +232,7 @@ func (bh *BaseHandler) MetricGetJSONHandler() http.HandlerFunc {
 			metricModel = *models.NewMetricModel(metricGetRequestModel.ID, metricGetRequestModel.MType, 0, value)
 
 		} else if metricGetRequestModel.MType == common.MetricTypeCounter {
-			value, ok, err := bh.store.GetCounter(metricGetRequestModel.ID)
+			value, ok, err := bh.store.GetCounter(ctx, metricGetRequestModel.ID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -256,10 +264,7 @@ func (bh *BaseHandler) MetricGetJSONHandler() http.HandlerFunc {
 
 func (bh *BaseHandler) PingHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		defer cancel()
-
+		ctx := r.Context()
 		err := bh.store.Ping(ctx)
 		if err != nil {
 			log.Printf("failed to ping store %v", err)
@@ -282,7 +287,9 @@ func (bh *BaseHandler) MetricBatchUpdateJSONHandler() http.HandlerFunc {
 			return
 		}
 
-		newMetrics, err := bh.store.BatchUpdate(metricModelsRequest)
+		ctx := r.Context()
+
+		newMetrics, err := bh.store.BatchUpdate(ctx, metricModelsRequest)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
