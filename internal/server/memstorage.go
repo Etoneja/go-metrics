@@ -130,10 +130,10 @@ func (ms *MemStorage) IncrementCounter(key string, value int64) (int64, error) {
 	return value, nil
 }
 
-func (ms *MemStorage) GetAll() *[]models.MetricModel {
+func (ms *MemStorage) GetAll() (*[]models.MetricModel, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
-	return ms.getAll()
+	return ms.getAll(), nil
 }
 
 func (ms *MemStorage) getAll() *[]models.MetricModel {
