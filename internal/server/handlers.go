@@ -13,9 +13,15 @@ import (
 	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/models"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
-func MetricUpdateHandler(store Storager) http.HandlerFunc {
+type BaseHandler struct {
+	store  Storager
+	logger *zap.Logger
+}
+
+func (bh *BaseHandler) MetricUpdateHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		metricType := chi.URLParam(r, "metricType")
@@ -33,7 +39,7 @@ func MetricUpdateHandler(store Storager) http.HandlerFunc {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			_, err = store.SetGauge(metricName, num)
+			_, err = bh.store.SetGauge(metricName, num)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -45,7 +51,7 @@ func MetricUpdateHandler(store Storager) http.HandlerFunc {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			_, err = store.IncrementCounter(metricName, num)
+			_, err = bh.store.IncrementCounter(metricName, num)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -62,7 +68,7 @@ func MetricUpdateHandler(store Storager) http.HandlerFunc {
 
 }
 
-func MetricGetHandler(store Storager) http.HandlerFunc {
+func (bh *BaseHandler) MetricGetHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		metricType := chi.URLParam(r, "metricType")
@@ -74,9 +80,9 @@ func MetricGetHandler(store Storager) http.HandlerFunc {
 
 		switch metricType {
 		case common.MetricTypeGauge:
-			value, ok, err = store.GetGauge(metricName)
+			value, ok, err = bh.store.GetGauge(metricName)
 		case common.MetricTypeCounter:
-			value, ok, err = store.GetCounter(metricName)
+			value, ok, err = bh.store.GetCounter(metricName)
 		default:
 			http.Error(w, "Bad Request: bad metric type", http.StatusBadRequest)
 			return
@@ -94,10 +100,10 @@ func MetricGetHandler(store Storager) http.HandlerFunc {
 	}
 }
 
-func MetricListHandler(store Storager) http.HandlerFunc {
+func (bh *BaseHandler) MetricListHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		metrics, err := store.GetAll()
+		metrics, err := bh.store.GetAll()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -123,7 +129,7 @@ func MetricListHandler(store Storager) http.HandlerFunc {
 	}
 }
 
-func MetricUpdateJSONHandler(store Storager) http.HandlerFunc {
+func (bh *BaseHandler) MetricUpdateJSONHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		var metricModelRequest models.MetricModel
@@ -145,7 +151,7 @@ func MetricUpdateJSONHandler(store Storager) http.HandlerFunc {
 				return
 			}
 
-			newValue, err := store.SetGauge(metricModelRequest.ID, *metricModelRequest.Value)
+			newValue, err := bh.store.SetGauge(metricModelRequest.ID, *metricModelRequest.Value)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -159,7 +165,7 @@ func MetricUpdateJSONHandler(store Storager) http.HandlerFunc {
 				return
 			}
 
-			newValue, err := store.IncrementCounter(metricModelRequest.ID, *metricModelRequest.Delta)
+			newValue, err := bh.store.IncrementCounter(metricModelRequest.ID, *metricModelRequest.Delta)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -186,7 +192,7 @@ func MetricUpdateJSONHandler(store Storager) http.HandlerFunc {
 
 }
 
-func MetricGetJSONHandler(store Storager) http.HandlerFunc {
+func (bh *BaseHandler) MetricGetJSONHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		var metricGetRequestModel models.MetricGetRequestModel
@@ -205,7 +211,7 @@ func MetricGetJSONHandler(store Storager) http.HandlerFunc {
 		}
 
 		if metricGetRequestModel.MType == common.MetricTypeGauge {
-			value, ok, err := store.GetGauge(metricGetRequestModel.ID)
+			value, ok, err := bh.store.GetGauge(metricGetRequestModel.ID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -218,7 +224,7 @@ func MetricGetJSONHandler(store Storager) http.HandlerFunc {
 			metricModel = *models.NewMetricModel(metricGetRequestModel.ID, metricGetRequestModel.MType, 0, value)
 
 		} else if metricGetRequestModel.MType == common.MetricTypeCounter {
-			value, ok, err := store.GetCounter(metricGetRequestModel.ID)
+			value, ok, err := bh.store.GetCounter(metricGetRequestModel.ID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -248,13 +254,13 @@ func MetricGetJSONHandler(store Storager) http.HandlerFunc {
 
 }
 
-func PingHandler(store Storager) http.HandlerFunc {
+func (bh *BaseHandler) PingHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		err := store.Ping(ctx)
+		err := bh.store.Ping(ctx)
 		if err != nil {
 			log.Printf("failed to ping store %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -266,7 +272,7 @@ func PingHandler(store Storager) http.HandlerFunc {
 
 }
 
-func MetricBatchUpdateJSONHandler(store Storager) http.HandlerFunc {
+func (bh *BaseHandler) MetricBatchUpdateJSONHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		var metricModelsRequest []models.MetricModel
@@ -276,7 +282,7 @@ func MetricBatchUpdateJSONHandler(store Storager) http.HandlerFunc {
 			return
 		}
 
-		newMetrics, err := store.BatchUpdate(&metricModelsRequest)
+		newMetrics, err := bh.store.BatchUpdate(&metricModelsRequest)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
