@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sort"
 	"strconv"
 	"time"
 
@@ -104,10 +103,6 @@ func MetricListHandler(store Storager) http.HandlerFunc {
 			return
 		}
 
-		sort.Slice(*metrics, func(i, j int) bool {
-			return (*metrics)[i].ID < (*metrics)[j].ID
-		})
-
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 
@@ -120,7 +115,7 @@ func MetricListHandler(store Storager) http.HandlerFunc {
 			} else {
 				value = common.AnyToString(*m.Value)
 			}
-			fmt.Fprintf(w, "%s=%s\n", m.ID, value)
+			fmt.Fprintf(w, "%s[%s]=%s\n", m.ID, m.MType, value)
 		}
 
 		fmt.Fprintln(w, "</pre></body></html>")
@@ -156,11 +151,7 @@ func MetricUpdateJSONHandler(store Storager) http.HandlerFunc {
 				return
 			}
 
-			metricModelResponse = models.MetricModel{
-				ID:    metricModelRequest.ID,
-				MType: metricModelRequest.MType,
-				Value: &newValue,
-			}
+			metricModelResponse = *models.NewMetricModel(metricModelRequest.ID, metricModelRequest.MType, 0, newValue)
 
 		} else if metricModelRequest.MType == common.MetricTypeCounter {
 			if metricModelRequest.Delta == nil {
@@ -174,11 +165,7 @@ func MetricUpdateJSONHandler(store Storager) http.HandlerFunc {
 				return
 			}
 
-			metricModelResponse = models.MetricModel{
-				ID:    metricModelRequest.ID,
-				MType: metricModelRequest.MType,
-				Delta: &newValue,
-			}
+			metricModelResponse = *models.NewMetricModel(metricModelRequest.ID, metricModelRequest.MType, newValue, 0)
 
 		} else {
 			http.Error(w, "Bad Request: bad metric type", http.StatusBadRequest)
@@ -228,11 +215,7 @@ func MetricGetJSONHandler(store Storager) http.HandlerFunc {
 				return
 			}
 
-			metricModel = models.MetricModel{
-				ID:    metricGetRequestModel.ID,
-				MType: metricGetRequestModel.MType,
-				Value: &value,
-			}
+			metricModel = *models.NewMetricModel(metricGetRequestModel.ID, metricGetRequestModel.MType, 0, value)
 
 		} else if metricGetRequestModel.MType == common.MetricTypeCounter {
 			value, ok, err := store.GetCounter(metricGetRequestModel.ID)
@@ -245,11 +228,7 @@ func MetricGetJSONHandler(store Storager) http.HandlerFunc {
 				return
 			}
 
-			metricModel = models.MetricModel{
-				ID:    metricGetRequestModel.ID,
-				MType: metricGetRequestModel.MType,
-				Delta: &value,
-			}
+			metricModel = *models.NewMetricModel(metricGetRequestModel.ID, metricGetRequestModel.MType, value, 0)
 
 		} else {
 			http.Error(w, "Bad Request: bad metric type", http.StatusBadRequest)
@@ -282,6 +261,36 @@ func PingHandler(store Storager) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
+
+	}
+
+}
+
+func MetricBatchUpdateJSONHandler(store Storager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		var metricModelsRequest []models.MetricModel
+
+		if err := json.NewDecoder(r.Body).Decode(&metricModelsRequest); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		newMetrics, err := store.BatchUpdate(&metricModelsRequest)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		resp, err := json.Marshal(newMetrics)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(resp)
 
 	}
 

@@ -13,6 +13,7 @@ type Storager interface {
 	IncrementCounter(key string, value int64) (int64, error)
 	GetAll() (*[]models.MetricModel, error)
 
+	BatchUpdate(*[]models.MetricModel) (*[]models.MetricModel, error)
 	Ping(ctx context.Context) error
 	ShutDown()
 }
