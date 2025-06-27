@@ -70,16 +70,25 @@ func NewMemStorageFromStorageConfig(sc *StorageConfig) *MemStorage {
 	return ms
 }
 
-func (ms *MemStorage) GetGauge(key string) (float64, bool, error) {
+func (ms *MemStorage) GetGauge(ctx context.Context, key string) (float64, bool, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
+
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+
 	val, ok := ms.gauge[key]
 	return val, ok, nil
 }
 
-func (ms *MemStorage) SetGauge(key string, value float64) (float64, error) {
+func (ms *MemStorage) SetGauge(ctx context.Context, key string, value float64) (float64, error) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 
 	prevValue, ok := ms.gauge[key]
 
@@ -100,16 +109,25 @@ func (ms *MemStorage) SetGauge(key string, value float64) (float64, error) {
 	return value, nil
 }
 
-func (ms *MemStorage) GetCounter(key string) (int64, bool, error) {
+func (ms *MemStorage) GetCounter(ctx context.Context, key string) (int64, bool, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
+
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+
 	val, ok := ms.counter[key]
 	return val, ok, nil
 }
 
-func (ms *MemStorage) IncrementCounter(key string, value int64) (int64, error) {
+func (ms *MemStorage) IncrementCounter(ctx context.Context, key string, value int64) (int64, error) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 
 	val, ok := ms.counter[key]
 
@@ -133,9 +151,14 @@ func (ms *MemStorage) IncrementCounter(key string, value int64) (int64, error) {
 	return value, nil
 }
 
-func (ms *MemStorage) GetAll() ([]models.MetricModel, error) {
+func (ms *MemStorage) GetAll(ctx context.Context) ([]models.MetricModel, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	return ms.getAll(), nil
 }
 
@@ -290,12 +313,19 @@ func (ms *MemStorage) ShutDown() {
 }
 
 func (ms *MemStorage) Ping(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return nil
 }
 
-func (ms *MemStorage) BatchUpdate(metrics []models.MetricModel) ([]models.MetricModel, error) {
+func (ms *MemStorage) BatchUpdate(ctx context.Context, metrics []models.MetricModel) ([]models.MetricModel, error) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	backupCounters := make(map[string]int64, len(ms.counter))
 	maps.Copy(backupCounters, ms.counter)
@@ -305,14 +335,8 @@ func (ms *MemStorage) BatchUpdate(metrics []models.MetricModel) ([]models.Metric
 
 	newMetrics := make([]models.MetricModel, 0, len(metrics))
 
-	metricsCopy := make([]models.MetricModel, len(metrics))
-	copy(metricsCopy, metrics)
-	sort.Slice(metricsCopy, func(i, j int) bool {
-		return metricsCopy[i].ID < metricsCopy[j].ID
-	})
-
 	var err error
-	for _, m := range metricsCopy {
+	for _, m := range metrics {
 		if m.MType == common.MetricTypeCounter {
 			val, ok := ms.counter[m.ID]
 			if ok {
