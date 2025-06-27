@@ -133,13 +133,13 @@ func (ms *MemStorage) IncrementCounter(key string, value int64) (int64, error) {
 	return value, nil
 }
 
-func (ms *MemStorage) GetAll() (*[]models.MetricModel, error) {
+func (ms *MemStorage) GetAll() ([]models.MetricModel, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	return ms.getAll(), nil
 }
 
-func (ms *MemStorage) getAll() *[]models.MetricModel {
+func (ms *MemStorage) getAll() []models.MetricModel {
 	metrics := make([]models.MetricModel, 0, len(ms.gauge)+len(ms.counter))
 	for k, v := range ms.gauge {
 		metrics = append(metrics, *models.NewMetricModel(k, common.MetricTypeGauge, 0, v))
@@ -151,7 +151,7 @@ func (ms *MemStorage) getAll() *[]models.MetricModel {
 		return metrics[i].ID < metrics[j].ID
 	})
 
-	return &metrics
+	return metrics
 }
 
 func (ms *MemStorage) Dump() error {
@@ -293,7 +293,7 @@ func (ms *MemStorage) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (ms *MemStorage) BatchUpdate(metrics *[]models.MetricModel) (*[]models.MetricModel, error) {
+func (ms *MemStorage) BatchUpdate(metrics []models.MetricModel) ([]models.MetricModel, error) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
@@ -303,10 +303,10 @@ func (ms *MemStorage) BatchUpdate(metrics *[]models.MetricModel) (*[]models.Metr
 	backupGauges := make(map[string]float64, len(ms.gauge))
 	maps.Copy(backupGauges, ms.gauge)
 
-	newMetrics := make([]models.MetricModel, 0, len(*metrics))
+	newMetrics := make([]models.MetricModel, 0, len(metrics))
 
-	metricsCopy := make([]models.MetricModel, len(*metrics))
-	copy(metricsCopy, *metrics)
+	metricsCopy := make([]models.MetricModel, len(metrics))
+	copy(metricsCopy, metrics)
 	sort.Slice(metricsCopy, func(i, j int) bool {
 		return metricsCopy[i].ID < metricsCopy[j].ID
 	})
@@ -350,5 +350,5 @@ func (ms *MemStorage) BatchUpdate(metrics *[]models.MetricModel) (*[]models.Metr
 		}
 	}
 
-	return &newMetrics, nil
+	return newMetrics, nil
 }
