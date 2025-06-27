@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"maps"
 
 	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/models"
@@ -144,6 +147,10 @@ func (ms *MemStorage) getAll() *[]models.MetricModel {
 	for k, v := range ms.counter {
 		metrics = append(metrics, *models.NewMetricModel(k, common.MetricTypeCounter, v, 0))
 	}
+	sort.Slice(metrics, func(i, j int) bool {
+		return metrics[i].ID < metrics[j].ID
+	})
+
 	return &metrics
 }
 
@@ -284,4 +291,64 @@ func (ms *MemStorage) ShutDown() {
 
 func (ms *MemStorage) Ping(ctx context.Context) error {
 	return nil
+}
+
+func (ms *MemStorage) BatchUpdate(metrics *[]models.MetricModel) (*[]models.MetricModel, error) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	backupCounters := make(map[string]int64, len(ms.counter))
+	maps.Copy(backupCounters, ms.counter)
+
+	backupGauges := make(map[string]float64, len(ms.gauge))
+	maps.Copy(backupGauges, ms.gauge)
+
+	newMetrics := make([]models.MetricModel, 0, len(*metrics))
+
+	metricsCopy := make([]models.MetricModel, len(*metrics))
+	copy(metricsCopy, *metrics)
+	sort.Slice(metricsCopy, func(i, j int) bool {
+		return metricsCopy[i].ID < metricsCopy[j].ID
+	})
+
+	var err error
+	for _, m := range metricsCopy {
+		if m.MType == common.MetricTypeCounter {
+			val, ok := ms.counter[m.ID]
+			if ok {
+				val += *m.Delta
+			} else {
+				val = *m.Delta
+			}
+			ms.counter[m.ID] = val
+			newMetrics = append(newMetrics, *models.NewMetricModel(m.ID, m.MType, *m.Delta, 0))
+		} else if m.MType == common.MetricTypeGauge {
+			val := *m.Value
+			ms.gauge[m.ID] = val
+			newMetrics = append(newMetrics, *models.NewMetricModel(m.ID, m.MType, 0, *m.Value))
+		} else {
+			err = fmt.Errorf("bad metric type %s", m.MType)
+			break
+		}
+	}
+
+	restoreBackup := func() {
+		ms.counter = backupCounters
+		ms.gauge = backupGauges
+	}
+
+	if err != nil {
+		restoreBackup()
+		return nil, err
+	}
+
+	if ms.syncDump {
+		err := ms.dump()
+		if err != nil {
+			restoreBackup()
+			return nil, err
+		}
+	}
+
+	return &newMetrics, nil
 }
