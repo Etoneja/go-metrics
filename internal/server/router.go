@@ -7,7 +7,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-
 func NewRouter(store Storager) http.Handler {
 	r := chi.NewRouter()
 
