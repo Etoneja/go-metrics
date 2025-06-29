@@ -3,26 +3,26 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
+	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/models"
 )
 
-func performRequest(client HTTPDoer, endpoint string, metricModel *models.MetricModel, wg *sync.WaitGroup) error {
-	defer wg.Done()
+func performRequest(ctx context.Context, client HTTPDoer, endpoint string, metrics []*models.MetricModel) error {
 
-	url := buildURL(endpoint, "update/")
+	url := buildURL(endpoint, "updates/")
 
-	rawData, err := json.Marshal(metricModel)
+	rawData, err := json.Marshal(metrics)
 	if err != nil {
-		return fmt.Errorf("unexpected error - failed to marshal metric: %w", err)
+		return fmt.Errorf("unexpected error - failed to marshal metrics: %w", err)
 	}
 
 	var buf bytes.Buffer
@@ -44,58 +44,49 @@ func performRequest(client HTTPDoer, endpoint string, metricModel *models.Metric
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := client.Do(req)
+	var reqErr error
 
-	if err != nil {
-		log.Printf("failed to request %s: %v", url, err)
-		return fmt.Errorf("unexpected error - failed to send request: %w", err)
-	}
-	defer func() {
+	backoffSchedule := common.DefaultBackoffSchedule
+	backoffTicker := common.GetBackoffTicker(ctx, backoffSchedule)
+	attemptNum := 0
+	for range backoffTicker {
+		attemptNum++
+		attemptString := fmt.Sprintf("[%d/%d]", attemptNum, len(backoffSchedule)+1)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("%s failed to request %s: %v", attemptString, url, err)
+			reqErr = fmt.Errorf("failed to send request: %w", err)
+			continue
+		}
+
 		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
-	}()
 
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("non-OK status code for %s: %d", url, resp.StatusCode)
+		if resp.StatusCode/100 == 2 {
+			log.Printf("%s Request to %s succeeded", attemptString, url)
+			return nil
+		} else if resp.StatusCode/100 == 5 {
+			continue
+		}
+
+		log.Printf("%s bad status code for %s: %d", attemptString, url, resp.StatusCode)
 		return errors.New("bad status")
 	}
 
-	log.Printf("Request to %s succeeded", url)
-	return nil
+	return reqErr
+
 }
 
 type Reporter struct {
-	stats         *Stats
-	iteration     uint
-	client        HTTPDoer
-	endpoint      string
-	sleepDuration time.Duration
+	stats          *Stats
+	iteration      uint
+	client         HTTPDoer
+	endpoint       string
+	reportInterval time.Duration
 }
 
-func (r *Reporter) send(metrics []*models.MetricModel) {
-	var wg sync.WaitGroup
-	semaphore := make(chan struct{}, semaphoreSize)
-
-	for _, m := range metrics {
-		semaphore <- struct{}{}
-		wg.Add(1)
-
-		go func(m *models.MetricModel) {
-			defer func() {
-				<-semaphore
-			}()
-
-			err := performRequest(r.client, r.endpoint, m, &wg)
-			if err != nil {
-				log.Printf("Error occurred sending metric %s: %v", m.ID, err)
-			}
-		}(m)
-	}
-
-	wg.Wait()
-}
-
-func (r *Reporter) report() {
+func (r *Reporter) report(ctx context.Context) {
 	r.iteration++
 	log.Println("Report - start iteration", r.iteration)
 	if r.stats.getCounter() == 0 {
@@ -104,26 +95,36 @@ func (r *Reporter) report() {
 	}
 	metrics := r.stats.dump()
 
-	r.send(metrics)
+	err := performRequest(ctx, r.client, r.endpoint, metrics)
+	if err != nil {
+		log.Printf("Error occurred sending metrcs %v", err)
+	}
 
 	log.Println("Report - finish iteration", r.iteration)
 }
 
-func (r *Reporter) runRoutine() {
+func (r *Reporter) runRoutine(ctx context.Context) error {
+	ticker := time.NewTicker(time.Duration(r.reportInterval))
+	defer ticker.Stop()
+
 	for {
-		r.report()
-		time.Sleep(r.sleepDuration)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			r.report(ctx)
+		}
 	}
 }
 
-func newReporter(stats *Stats, endpoint string, sleepDuration time.Duration) *Reporter {
+func newReporter(stats *Stats, endpoint string, reportInterval time.Duration) *Reporter {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 	return &Reporter{
-		stats:         stats,
-		client:        client,
-		endpoint:      endpoint,
-		sleepDuration: sleepDuration,
+		stats:          stats,
+		client:         client,
+		endpoint:       endpoint,
+		reportInterval: reportInterval,
 	}
 }

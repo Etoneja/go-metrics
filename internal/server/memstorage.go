@@ -1,13 +1,17 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"maps"
 
 	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/models"
@@ -66,16 +70,25 @@ func NewMemStorageFromStorageConfig(sc *StorageConfig) *MemStorage {
 	return ms
 }
 
-func (ms *MemStorage) GetGauge(key string) (float64, bool, error) {
+func (ms *MemStorage) GetGauge(ctx context.Context, key string) (float64, bool, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
+
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+
 	val, ok := ms.gauge[key]
 	return val, ok, nil
 }
 
-func (ms *MemStorage) SetGauge(key string, value float64) (float64, error) {
+func (ms *MemStorage) SetGauge(ctx context.Context, key string, value float64) (float64, error) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 
 	prevValue, ok := ms.gauge[key]
 
@@ -96,16 +109,25 @@ func (ms *MemStorage) SetGauge(key string, value float64) (float64, error) {
 	return value, nil
 }
 
-func (ms *MemStorage) GetCounter(key string) (int64, bool, error) {
+func (ms *MemStorage) GetCounter(ctx context.Context, key string) (int64, bool, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
+
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+
 	val, ok := ms.counter[key]
 	return val, ok, nil
 }
 
-func (ms *MemStorage) IncrementCounter(key string, value int64) (int64, error) {
+func (ms *MemStorage) IncrementCounter(ctx context.Context, key string, value int64) (int64, error) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 
 	val, ok := ms.counter[key]
 
@@ -129,13 +151,18 @@ func (ms *MemStorage) IncrementCounter(key string, value int64) (int64, error) {
 	return value, nil
 }
 
-func (ms *MemStorage) GetAll() *[]models.MetricModel {
+func (ms *MemStorage) GetAll(ctx context.Context) ([]models.MetricModel, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
-	return ms.getAll()
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	return ms.getAll(), nil
 }
 
-func (ms *MemStorage) getAll() *[]models.MetricModel {
+func (ms *MemStorage) getAll() []models.MetricModel {
 	metrics := make([]models.MetricModel, 0, len(ms.gauge)+len(ms.counter))
 	for k, v := range ms.gauge {
 		metrics = append(metrics, *models.NewMetricModel(k, common.MetricTypeGauge, 0, v))
@@ -143,7 +170,11 @@ func (ms *MemStorage) getAll() *[]models.MetricModel {
 	for k, v := range ms.counter {
 		metrics = append(metrics, *models.NewMetricModel(k, common.MetricTypeCounter, v, 0))
 	}
-	return &metrics
+	sort.Slice(metrics, func(i, j int) bool {
+		return metrics[i].ID < metrics[j].ID
+	})
+
+	return metrics
 }
 
 func (ms *MemStorage) Dump() error {
@@ -154,9 +185,9 @@ func (ms *MemStorage) Dump() error {
 }
 
 func (ms *MemStorage) dump() error {
-    if !ms.dumpInProgress.CompareAndSwap(false, true) {
-        return fmt.Errorf("dump already in progress")
-    }
+	if !ms.dumpInProgress.CompareAndSwap(false, true) {
+		return fmt.Errorf("dump already in progress")
+	}
 
 	defer func() {
 		ms.dumpInProgress.Store(false)
@@ -174,7 +205,7 @@ func (ms *MemStorage) dump() error {
 	defer func() {
 		file.Close()
 		if err != nil {
-			os.Remove(tmpPath) 
+			os.Remove(tmpPath)
 		}
 	}()
 
@@ -186,10 +217,10 @@ func (ms *MemStorage) dump() error {
 		return fmt.Errorf("failed to encode metrics: %w", err)
 	}
 
-    err = file.Sync()
+	err = file.Sync()
 	if err != nil {
-        return fmt.Errorf("failed to sync file: %w", err)
-    }
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
 
 	err = os.Rename(tmpPath, ms.filePath)
 	if err != nil {
@@ -279,4 +310,69 @@ func (ms *MemStorage) ShutDown() {
 		<-ms.doneChan
 	}
 	log.Println("MemStorage shutdowned")
+}
+
+func (ms *MemStorage) Ping(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (ms *MemStorage) BatchUpdate(ctx context.Context, metrics []models.MetricModel) ([]models.MetricModel, error) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	backupCounters := make(map[string]int64, len(ms.counter))
+	maps.Copy(backupCounters, ms.counter)
+
+	backupGauges := make(map[string]float64, len(ms.gauge))
+	maps.Copy(backupGauges, ms.gauge)
+
+	newMetrics := make([]models.MetricModel, 0, len(metrics))
+
+	var err error
+	for _, m := range metrics {
+		if m.MType == common.MetricTypeCounter {
+			val, ok := ms.counter[m.ID]
+			if ok {
+				val += *m.Delta
+			} else {
+				val = *m.Delta
+			}
+			ms.counter[m.ID] = val
+			newMetrics = append(newMetrics, *models.NewMetricModel(m.ID, m.MType, *m.Delta, 0))
+		} else if m.MType == common.MetricTypeGauge {
+			val := *m.Value
+			ms.gauge[m.ID] = val
+			newMetrics = append(newMetrics, *models.NewMetricModel(m.ID, m.MType, 0, *m.Value))
+		} else {
+			err = fmt.Errorf("bad metric type %s", m.MType)
+			break
+		}
+	}
+
+	restoreBackup := func() {
+		ms.counter = backupCounters
+		ms.gauge = backupGauges
+	}
+
+	if err != nil {
+		restoreBackup()
+		return nil, err
+	}
+
+	if ms.syncDump {
+		err := ms.dump()
+		if err != nil {
+			restoreBackup()
+			return nil, err
+		}
+	}
+
+	return newMetrics, nil
 }

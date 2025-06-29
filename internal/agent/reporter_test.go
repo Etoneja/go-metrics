@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -28,22 +29,24 @@ func (m *mockClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 func TestReporter_report(t *testing.T) {
-	fakeDuration := time.Duration(time.Millisecond)
+	fakeReportInterval := time.Duration(time.Millisecond)
 	fakeEndpoint := "http://fake.com/"
 	stats := newStats()
 
 	mockCli := &mockClient{}
 	t.Run("test report", func(t *testing.T) {
 		r := &Reporter{
-			stats:         stats,
-			client:        mockCli,
-			endpoint:      fakeEndpoint,
-			sleepDuration: fakeDuration,
+			stats:          stats,
+			client:         mockCli,
+			endpoint:       fakeEndpoint,
+			reportInterval: fakeReportInterval,
 		}
 		assert.Equal(t, uint(0), r.iteration)
 
+		ctx := context.Background()
+
 		// stats not collected
-		r.report()
+		r.report(ctx)
 
 		assert.Equal(t, uint(1), r.iteration)
 		assert.Equal(t, 0, len(mockCli.requests))
@@ -51,15 +54,13 @@ func TestReporter_report(t *testing.T) {
 		stats.collect()
 
 		// stats collected
-		r.report()
+		r.report(ctx)
 
-		metrics := r.stats.dump()
+		assert.Equal(t, 1, len(mockCli.requests))
 
-		assert.Equal(t, len(metrics), len(mockCli.requests))
-		for _, req := range mockCli.requests {
-			assert.Equal(t, req.URL.Path, "/update/")
-			assert.Equal(t, http.MethodPost, req.Method)
-		}
+		req := mockCli.requests[0]
+		assert.Equal(t, req.URL.Path, "/updates/")
+		assert.Equal(t, http.MethodPost, req.Method)
 	})
 
 }

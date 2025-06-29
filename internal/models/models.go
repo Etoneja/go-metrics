@@ -52,13 +52,19 @@ func (m *MetricModel) UnmarshalJSON(data []byte) error {
 
 	switch m.MType {
 	case common.MetricTypeCounter:
+		if aux.Delta == nil {
+			return fmt.Errorf("bad metric delta for metric: metrics=%s, type=%s", m.ID, m.MType)
+		}
 		m.Delta = aux.Delta
 		m.Value = nil
 	case common.MetricTypeGauge:
+		if aux.Value == nil {
+			return fmt.Errorf("bad metric value for metric: metrics=%s, type=%s", m.ID, m.MType)
+		}
 		m.Value = aux.Value
 		m.Delta = nil
 	default:
-		return fmt.Errorf("unknown metric type: %s", m.MType)
+		return fmt.Errorf("unknown metric type for metric: metrics=%s, type=%s", m.ID, m.MType)
 	}
 
 	return nil

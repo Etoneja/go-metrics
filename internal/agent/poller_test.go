@@ -8,7 +8,7 @@ import (
 )
 
 func TestPoller_poll(t *testing.T) {
-	fakeDuration := time.Duration(time.Millisecond)
+	fakePollInterval := time.Duration(time.Millisecond)
 	type fields struct {
 		stats *Stats
 	}
@@ -26,8 +26,8 @@ func TestPoller_poll(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &Poller{
-				stats:         tt.fields.stats,
-				sleepDuration: fakeDuration,
+				stats:        tt.fields.stats,
+				pollInterval: fakePollInterval,
 			}
 
 			assert.Equal(t, 0, tt.fields.stats.PollCount)

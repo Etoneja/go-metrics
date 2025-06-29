@@ -28,7 +28,7 @@ func (r *loggingResponseWriter) WriteHeader(statusCode int) {
 	r.responseData.status = statusCode
 }
 
-func LoggerMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
+func (bmw *BaseMiddleware) LoggerMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		logFn := func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
@@ -45,7 +45,7 @@ func LoggerMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
 
 			next.ServeHTTP(lw, r)
 
-			logger.Info("Request processed",
+			bmw.logger.Info("Request processed",
 				zap.String("uri", r.RequestURI),
 				zap.String("method", r.Method),
 				zap.Duration("duration", time.Since(start)),
