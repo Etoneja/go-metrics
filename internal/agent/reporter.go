@@ -10,20 +10,18 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/etoneja/go-metrics/internal/models"
 )
 
-func performRequest(client HTTPDoer, endpoint string, metricModel *models.MetricModel, wg *sync.WaitGroup) error {
-	defer wg.Done()
+func performRequest(client HTTPDoer, endpoint string, metrics []*models.MetricModel) error {
 
-	url := buildURL(endpoint, "update/")
+	url := buildURL(endpoint, "updates/")
 
-	rawData, err := json.Marshal(metricModel)
+	rawData, err := json.Marshal(metrics)
 	if err != nil {
-		return fmt.Errorf("unexpected error - failed to marshal metric: %w", err)
+		return fmt.Errorf("unexpected error - failed to marshal metrics: %w", err)
 	}
 
 	var buf bytes.Buffer
@@ -49,7 +47,7 @@ func performRequest(client HTTPDoer, endpoint string, metricModel *models.Metric
 
 	if err != nil {
 		log.Printf("failed to request %s: %v", url, err)
-		return fmt.Errorf("unexpected error - failed to send request: %w", err)
+		return fmt.Errorf("failed to send request: %w", err)
 	}
 	defer func() {
 		_, _ = io.Copy(io.Discard, resp.Body)
@@ -73,29 +71,6 @@ type Reporter struct {
 	reportInterval time.Duration
 }
 
-func (r *Reporter) send(metrics []*models.MetricModel) {
-	var wg sync.WaitGroup
-	semaphore := make(chan struct{}, semaphoreSize)
-
-	for _, m := range metrics {
-		semaphore <- struct{}{}
-		wg.Add(1)
-
-		go func(m *models.MetricModel) {
-			defer func() {
-				<-semaphore
-			}()
-
-			err := performRequest(r.client, r.endpoint, m, &wg)
-			if err != nil {
-				log.Printf("Error occurred sending metric %s: %v", m.ID, err)
-			}
-		}(m)
-	}
-
-	wg.Wait()
-}
-
 func (r *Reporter) report() {
 	r.iteration++
 	log.Println("Report - start iteration", r.iteration)
@@ -105,7 +80,10 @@ func (r *Reporter) report() {
 	}
 	metrics := r.stats.dump()
 
-	r.send(metrics)
+	err := performRequest(r.client, r.endpoint, metrics)
+	if err != nil {
+		log.Printf("Error occurred sending metrcs %v", err)
+	}
 
 	log.Println("Report - finish iteration", r.iteration)
 }
