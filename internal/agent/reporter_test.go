@@ -53,13 +53,11 @@ func TestReporter_report(t *testing.T) {
 		// stats collected
 		r.report()
 
-		metrics := r.stats.dump()
+		assert.Equal(t, 1, len(mockCli.requests))
 
-		assert.Equal(t, len(metrics), len(mockCli.requests))
-		for _, req := range mockCli.requests {
-			assert.Equal(t, req.URL.Path, "/update/")
-			assert.Equal(t, http.MethodPost, req.Method)
-		}
+		req := mockCli.requests[0]
+		assert.Equal(t, req.URL.Path, "/updates/")
+		assert.Equal(t, http.MethodPost, req.Method)
 	})
 
 }
