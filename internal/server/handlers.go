@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -76,21 +77,20 @@ func (bh *BaseHandler) MetricGetHandler() http.HandlerFunc {
 
 		var value any
 		var err error
-		var ok bool
 
 		ctx := r.Context()
 
 		switch metricType {
 		case common.MetricTypeGauge:
-			value, ok, err = bh.store.GetGauge(ctx, metricName)
+			value, err = bh.store.GetGauge(ctx, metricName)
 		case common.MetricTypeCounter:
-			value, ok, err = bh.store.GetCounter(ctx, metricName)
+			value, err = bh.store.GetCounter(ctx, metricName)
 		default:
 			http.Error(w, "Bad Request: bad metric type", http.StatusBadRequest)
 			return
 		}
-		if !ok {
-			http.Error(w, "Not found", http.StatusNotFound)
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
 		if err != nil {
@@ -219,26 +219,26 @@ func (bh *BaseHandler) MetricGetJSONHandler() http.HandlerFunc {
 		ctx := r.Context()
 
 		if metricGetRequestModel.MType == common.MetricTypeGauge {
-			value, ok, err := bh.store.GetGauge(ctx, metricGetRequestModel.ID)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+			value, err := bh.store.GetGauge(ctx, metricGetRequestModel.ID)
+			if errors.Is(err, ErrNotFound) {
+				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			}
-			if !ok {
-				http.Error(w, "Not found", http.StatusNotFound)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 
 			metricModel = *models.NewMetricModel(metricGetRequestModel.ID, metricGetRequestModel.MType, 0, value)
 
 		} else if metricGetRequestModel.MType == common.MetricTypeCounter {
-			value, ok, err := bh.store.GetCounter(ctx, metricGetRequestModel.ID)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+			value, err := bh.store.GetCounter(ctx, metricGetRequestModel.ID)
+			if errors.Is(err, ErrNotFound) {
+				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			}
-			if !ok {
-				http.Error(w, "Not found", http.StatusNotFound)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 

@@ -41,6 +41,7 @@ const (
 	`
 	querySelectCounter      = "select delta from metrics where id = $1;"
 	querySelectGauge        = "select value from metrics where id = $1;"
+	querySelectAllMetrics   = "select id, delta, value from metrics;"
 	queryCreateMetricsTable = `
 		CREATE TABLE IF NOT EXISTS metrics (
 			id varchar(150) primary key,
@@ -137,21 +138,21 @@ func (dbs *DBStorage) runMigrations(ctx context.Context) error {
 
 }
 
-func (dbs *DBStorage) GetGauge(ctx context.Context, key string) (float64, bool, error) {
+func (dbs *DBStorage) GetGauge(ctx context.Context, key string) (float64, error) {
 	row := dbs.pool.QueryRow(ctx, querySelectGauge, key)
 
 	var value sql.NullFloat64
 	err := row.Scan(&value)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, false, nil
+			return 0, fmt.Errorf("%s %s: %w", common.MetricTypeGauge, key, ErrNotFound)
 		}
-		return 0, false, err
+		return 0, err
 	}
 	if !value.Valid {
-		return 0, false, nil
+		return 0, fmt.Errorf("%s %s: %w", common.MetricTypeGauge, key, ErrNotFound)
 	}
-	return value.Float64, true, nil
+	return value.Float64, nil
 }
 
 func (dbs *DBStorage) SetGauge(ctx context.Context, key string, value float64) (float64, error) {
@@ -165,21 +166,21 @@ func (dbs *DBStorage) SetGauge(ctx context.Context, key string, value float64) (
 	return newvalue, nil
 }
 
-func (dbs *DBStorage) GetCounter(ctx context.Context, key string) (int64, bool, error) {
+func (dbs *DBStorage) GetCounter(ctx context.Context, key string) (int64, error) {
 	row := dbs.pool.QueryRow(ctx, querySelectCounter, key)
 
 	var value sql.NullInt64
 	err := row.Scan(&value)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, false, nil
+			return 0, fmt.Errorf("%s %s: %w", common.MetricTypeCounter, key, ErrNotFound)
 		}
-		return 0, false, err
+		return 0, err
 	}
 	if !value.Valid {
-		return 0, false, nil
+		return 0, fmt.Errorf("%s %s: %w", common.MetricTypeCounter, key, ErrNotFound)
 	}
-	return value.Int64, true, nil
+	return value.Int64, nil
 }
 
 func (dbs *DBStorage) IncrementCounter(ctx context.Context, key string, value int64) (int64, error) {
@@ -194,7 +195,7 @@ func (dbs *DBStorage) IncrementCounter(ctx context.Context, key string, value in
 }
 
 func (dbs *DBStorage) GetAll(ctx context.Context) ([]models.MetricModel, error) {
-	rows, err := dbs.pool.Query(ctx, "select id, delta, value from metrics;")
+	rows, err := dbs.pool.Query(ctx, querySelectAllMetrics)
 
 	if err != nil {
 		return nil, err

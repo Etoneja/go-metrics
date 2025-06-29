@@ -70,16 +70,19 @@ func NewMemStorageFromStorageConfig(sc *StorageConfig) *MemStorage {
 	return ms
 }
 
-func (ms *MemStorage) GetGauge(ctx context.Context, key string) (float64, bool, error) {
+func (ms *MemStorage) GetGauge(ctx context.Context, key string) (float64, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 
 	if err := ctx.Err(); err != nil {
-		return 0, false, err
+		return 0, err
 	}
 
 	val, ok := ms.gauge[key]
-	return val, ok, nil
+	if !ok {
+		return 0, fmt.Errorf("%s %s: %w", common.MetricTypeGauge, key, ErrNotFound)
+	}
+	return val, nil
 }
 
 func (ms *MemStorage) SetGauge(ctx context.Context, key string, value float64) (float64, error) {
@@ -109,16 +112,19 @@ func (ms *MemStorage) SetGauge(ctx context.Context, key string, value float64) (
 	return value, nil
 }
 
-func (ms *MemStorage) GetCounter(ctx context.Context, key string) (int64, bool, error) {
+func (ms *MemStorage) GetCounter(ctx context.Context, key string) (int64, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 
 	if err := ctx.Err(); err != nil {
-		return 0, false, err
+		return 0, err
 	}
 
 	val, ok := ms.counter[key]
-	return val, ok, nil
+	if !ok {
+		return 0, fmt.Errorf("%s %s: %w", common.MetricTypeCounter, key, ErrNotFound)
+	}
+	return val, nil
 }
 
 func (ms *MemStorage) IncrementCounter(ctx context.Context, key string, value int64) (int64, error) {
