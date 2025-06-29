@@ -12,10 +12,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/models"
 )
 
-func performRequest(client HTTPDoer, endpoint string, metrics []*models.MetricModel) error {
+func performRequest(ctx context.Context, client HTTPDoer, endpoint string, metrics []*models.MetricModel) error {
 
 	url := buildURL(endpoint, "updates/")
 
@@ -43,24 +44,38 @@ func performRequest(client HTTPDoer, endpoint string, metrics []*models.MetricMo
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := client.Do(req)
+	var reqErr error
 
-	if err != nil {
-		log.Printf("failed to request %s: %v", url, err)
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer func() {
+	backoffSchedule := common.DefaultBackoffSchedule
+	backoffTicker := common.GetBackoffTicker(ctx, backoffSchedule)
+	attemptNum := 0
+	for range backoffTicker {
+		attemptNum++
+		attemptString := fmt.Sprintf("[%d/%d]", attemptNum, len(backoffSchedule)+1)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("%s failed to request %s: %v", attemptString, url, err)
+			reqErr = fmt.Errorf("failed to send request: %w", err)
+			continue
+		}
+
 		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
-	}()
 
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("non-OK status code for %s: %d", url, resp.StatusCode)
+		if resp.StatusCode/100 == 2 {
+			log.Printf("%s Request to %s succeeded", attemptString, url)
+			return nil
+		} else if resp.StatusCode/100 == 5 {
+			continue
+		}
+
+		log.Printf("%s bad status code for %s: %d", attemptString, url, resp.StatusCode)
 		return errors.New("bad status")
 	}
 
-	log.Printf("Request to %s succeeded", url)
-	return nil
+	return reqErr
+
 }
 
 type Reporter struct {
@@ -71,7 +86,7 @@ type Reporter struct {
 	reportInterval time.Duration
 }
 
-func (r *Reporter) report() {
+func (r *Reporter) report(ctx context.Context) {
 	r.iteration++
 	log.Println("Report - start iteration", r.iteration)
 	if r.stats.getCounter() == 0 {
@@ -80,7 +95,7 @@ func (r *Reporter) report() {
 	}
 	metrics := r.stats.dump()
 
-	err := performRequest(r.client, r.endpoint, metrics)
+	err := performRequest(ctx, r.client, r.endpoint, metrics)
 	if err != nil {
 		log.Printf("Error occurred sending metrcs %v", err)
 	}
@@ -97,7 +112,7 @@ func (r *Reporter) runRoutine(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			r.report()
+			r.report(ctx)
 		}
 	}
 }

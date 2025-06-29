@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -42,8 +43,10 @@ func TestReporter_report(t *testing.T) {
 		}
 		assert.Equal(t, uint(0), r.iteration)
 
+		ctx := context.Background()
+
 		// stats not collected
-		r.report()
+		r.report(ctx)
 
 		assert.Equal(t, uint(1), r.iteration)
 		assert.Equal(t, 0, len(mockCli.requests))
@@ -51,7 +54,7 @@ func TestReporter_report(t *testing.T) {
 		stats.collect()
 
 		// stats collected
-		r.report()
+		r.report(ctx)
 
 		assert.Equal(t, 1, len(mockCli.requests))
 
