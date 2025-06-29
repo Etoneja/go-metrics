@@ -1,14 +1,15 @@
 package agent
 
 import (
+	"context"
 	"log"
 	"time"
 )
 
 type Poller struct {
-	stats         *Stats
-	iteration     uint
-	sleepDuration time.Duration
+	stats        *Stats
+	iteration    uint
+	pollInterval time.Duration
 }
 
 func (p *Poller) poll() {
@@ -17,16 +18,23 @@ func (p *Poller) poll() {
 	p.stats.collect()
 }
 
-func (p *Poller) runRoutine() {
+func (p *Poller) runRoutine(ctx context.Context) error {
+	ticker := time.NewTicker(time.Duration(p.pollInterval))
+	defer ticker.Stop()
+
 	for {
-		p.poll()
-		time.Sleep(p.sleepDuration)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			p.poll()
+		}
 	}
 }
 
-func newPoller(stats *Stats, sleepDuration time.Duration) *Poller {
+func newPoller(stats *Stats, pollInterval time.Duration) *Poller {
 	return &Poller{
-		stats:         stats,
-		sleepDuration: sleepDuration,
+		stats:        stats,
+		pollInterval: pollInterval,
 	}
 }

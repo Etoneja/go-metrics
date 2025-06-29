@@ -1,6 +1,11 @@
 package agent
 
-import "time"
+import (
+	"context"
+	"time"
+
+	"golang.org/x/sync/errgroup"
+)
 
 type service struct {
 	stats    *Stats
@@ -25,9 +30,16 @@ func NewService(cfg *config) *service {
 
 }
 
-func (s *service) Run() {
-	go s.poller.runRoutine()
-	go s.reporter.runRoutine()
+func (s *service) Run(ctx context.Context) error {
+	g, ctx := errgroup.WithContext(ctx)
 
-	select {}
+	g.Go(func() error {
+		return s.poller.runRoutine(ctx)
+	})
+
+	g.Go(func() error {
+		return s.reporter.runRoutine(ctx)
+	})
+
+	return g.Wait()
 }

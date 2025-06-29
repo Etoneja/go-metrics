@@ -1,10 +1,11 @@
 package main
 
 import (
+	"context"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/etoneja/go-metrics/internal/server"
@@ -17,19 +18,10 @@ func main() {
 	logger.Init(false)
 	defer logger.Sync()
 
-	storageConfig := &server.StorageConfig{
-		StoreInterval:   cfg.StoreInterval,
-		FileStoragePath: cfg.FileStoragePath,
-		Restore:         cfg.Restore,
-	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-
-	serverErrChan := make(chan error, 1)
-
-	store := server.NewMemStorageFromStorageConfig(storageConfig)
-	router := server.NewRouter(store)
+	store := server.NewStorageFromConfig(cfg)
 
 	logger.Get().Info("Server started",
 		zap.String("ServerAddress", cfg.ServerAddress),
@@ -38,8 +30,16 @@ func main() {
 		zap.Bool("Restore", cfg.Restore),
 	)
 
+	router := server.NewRouter(store)
+	srv := &http.Server{
+		Addr:    cfg.ServerAddress,
+		Handler: router,
+	}
+
+	serverErrChan := make(chan error, 1)
+
 	go func() {
-		err := http.ListenAndServe(cfg.ServerAddress, router)
+		err := srv.ListenAndServe()
 		if err != nil {
 			logger.Get().Error("Server failed",
 				zap.Error(err),
@@ -49,12 +49,21 @@ func main() {
 	}()
 
 	select {
-	case sig := <-signalChan:
-		logger.Get().Info("Received signal",
-			zap.String("signal", sig.String()),
-		)
+	case <-ctx.Done():
+		logger.Get().Info("Received shutdown signal")
 	case err := <-serverErrChan:
 		logger.Get().Info("Server error",
+			zap.Error(err),
+		)
+	}
+
+	logger.Get().Info("Shutting down server...")
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Get().Error("Server shutdown error",
 			zap.Error(err),
 		)
 	}
