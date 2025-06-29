@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"sort"
 	"time"
 
 	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/models"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -51,6 +53,19 @@ type DBStorage struct {
 	pool *pgxpool.Pool
 }
 
+func isDBRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr)
+}
+
 func NewDBStorage(connString string) *DBStorage {
 	ctx := context.Background()
 	config, err := pgxpool.ParseConfig(connString)
@@ -63,9 +78,41 @@ func NewDBStorage(connString string) *DBStorage {
 	config.MaxConnLifetime = MaxConnLifetime
 	config.MaxConnIdleTime = MaxConnIdleTime
 
-	pool, err := pgxpool.NewWithConfig(ctx, config)
-	if err != nil {
-		log.Fatalf("Unable to create connection pool: %v", err)
+	var pool *pgxpool.Pool
+	var poolErr error
+
+	backoffSchedule := common.DefaultBackoffSchedule
+	backoffTicker := common.GetBackoffTicker(ctx, backoffSchedule)
+	attemptNum := 0
+	for range backoffTicker {
+		attemptNum++
+		attemptString := fmt.Sprintf("[%d/%d]", attemptNum, len(backoffSchedule)+1)
+
+		pool, poolErr = pgxpool.NewWithConfig(ctx, config)
+		if poolErr != nil {
+			if isDBRetryableError(poolErr) {
+				log.Printf("%s retryable error, will retry: %v", attemptString, poolErr)
+				pool.Close()
+				continue
+			}
+			log.Fatalf("%s non-retryable error: %v", attemptString, poolErr)
+		}
+
+		poolErr = pool.Ping(ctx)
+		if poolErr != nil {
+			if isDBRetryableError(poolErr) {
+				log.Printf("%s retryable ping error, will retry: %v", attemptString, poolErr)
+				pool.Close()
+				continue
+			}
+			log.Fatalf("%s non-retryable ping error: %v", attemptString, poolErr)
+		}
+
+		break
+	}
+
+	if poolErr != nil {
+		log.Fatalf("Failed to connect to DB after all attempts: %v", poolErr)
 	}
 
 	dbs := &DBStorage{pool: pool}
