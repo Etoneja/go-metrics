@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(store Storager) http.Handler {
+func NewRouter(store Storager, hashKey string) http.Handler {
 	r := chi.NewRouter()
 
 	lg := logger.Get()
@@ -15,6 +15,7 @@ func NewRouter(store Storager) http.Handler {
 	bmw := BaseMiddleware{logger: lg}
 
 	r.Use(bmw.LoggerMiddleware())
+	r.Use(bmw.HashMiddleware(hashKey))
 	r.Use(bmw.GzipMiddleware())
 
 	bh := BaseHandler{store: store, logger: lg}

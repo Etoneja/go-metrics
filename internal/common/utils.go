@@ -2,6 +2,9 @@ package common
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"time"
@@ -61,4 +64,20 @@ func GetBackoffTicker(ctx context.Context, backoffSchedule []time.Duration) <-ch
 	}()
 
 	return ticker
+}
+
+func СomputeHash(key string, data []byte) string {
+	h := hmac.New(sha256.New, []byte(key))
+	h.Write(data)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func CompareHashes(hash1 string, hash2 string) bool {
+	h1, err1 := hex.DecodeString(hash1)
+	h2, err2 := hex.DecodeString(hash2)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+
+	return hmac.Equal(h1, h2)
 }

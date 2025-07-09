@@ -20,7 +20,7 @@ func NewService(cfg *config) *service {
 	poller := newPoller(stats, pollDuration)
 
 	reportDuration := time.Second * time.Duration(cfg.ReportInterval)
-	reporter := newReporter(stats, cfg.ServerEndpoint, reportDuration)
+	reporter := newReporter(stats, cfg.ServerEndpoint, reportDuration, cfg.HashKey)
 
 	return &service{
 		stats:    stats,

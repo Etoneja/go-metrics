@@ -13,6 +13,7 @@ type config struct {
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	Restore         bool   `env:"RESTORE"`
 	DatabaseDSN     string `env:"DATABASE_DSN"`
+	HashKey         string `env:"KEY"`
 }
 
 func PrepareConfig() *config {
@@ -28,6 +29,7 @@ func parseFlags(cfg *config) {
 	flag.StringVar(&cfg.FileStoragePath, "f", "data.json", "data dump file path")
 	flag.BoolVar(&cfg.Restore, "r", false, "restore dump (bool)")
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "database DSN")
+	flag.StringVar(&cfg.HashKey, "k", "", "Hash key")
 	flag.Parse()
 }
 
