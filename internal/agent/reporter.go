@@ -16,7 +16,7 @@ import (
 	"github.com/etoneja/go-metrics/internal/models"
 )
 
-func performRequest(ctx context.Context, client HTTPDoer, endpoint string, metrics []*models.MetricModel) error {
+func performRequest(ctx context.Context, client HTTPDoer, endpoint string, hashKey string, metrics []*models.MetricModel) error {
 
 	url := buildURL(endpoint, "updates/")
 
@@ -39,6 +39,11 @@ func performRequest(ctx context.Context, client HTTPDoer, endpoint string, metri
 	if err != nil {
 		log.Printf("http.NewRequest failed: method=%s, url=%s, err=%v", method, url, err)
 		return fmt.Errorf("unexpected error - failed to create request: %w", err)
+	}
+
+	if hashKey != "" {
+		hash := common.СomputeHash(hashKey, buf.Bytes())
+		req.Header.Set(common.HashHeaderKey, hash)
 	}
 
 	req.Header.Set("Content-Encoding", "gzip")
@@ -84,6 +89,7 @@ type Reporter struct {
 	client         HTTPDoer
 	endpoint       string
 	reportInterval time.Duration
+	hashKey        string
 }
 
 func (r *Reporter) report(ctx context.Context) {
@@ -95,7 +101,7 @@ func (r *Reporter) report(ctx context.Context) {
 	}
 	metrics := r.stats.dump()
 
-	err := performRequest(ctx, r.client, r.endpoint, metrics)
+	err := performRequest(ctx, r.client, r.endpoint, r.hashKey, metrics)
 	if err != nil {
 		log.Printf("Error occurred sending metrcs %v", err)
 	}
@@ -117,7 +123,7 @@ func (r *Reporter) runRoutine(ctx context.Context) error {
 	}
 }
 
-func newReporter(stats *Stats, endpoint string, reportInterval time.Duration) *Reporter {
+func newReporter(stats *Stats, endpoint string, reportInterval time.Duration, hashKey string) *Reporter {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
@@ -126,5 +132,6 @@ func newReporter(stats *Stats, endpoint string, reportInterval time.Duration) *R
 		client:         client,
 		endpoint:       endpoint,
 		reportInterval: reportInterval,
+		hashKey:        hashKey,
 	}
 }
