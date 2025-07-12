@@ -1,79 +1,92 @@
 package agent
 
 import (
-	"math/rand"
-	"runtime"
+	"context"
+	"errors"
+	"fmt"
 	"sync"
 
-	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/models"
 )
 
 func newStats() *Stats {
-	return &Stats{
-		memStats: &runtime.MemStats{},
-	}
+
+	return &Stats{collectors: []Collecter{
+		NewAnyCollector(),
+		NewMemCollector(),
+		NewPSCollector(),
+	}}
 }
 
 type Stats struct {
-	mu          sync.RWMutex
-	memStats    *runtime.MemStats
-	RandomValue int
-	PollCount   int
+	mu         sync.RWMutex
+	collectors []Collecter
+	metrics    []models.MetricModel
 }
 
-func (s *Stats) getCounter() int {
+func (s *Stats) collect(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.PollCount
+	resultCh := make(chan Result)
+
+	var wg sync.WaitGroup
+
+	for _, col := range s.collectors {
+		wg.Add(1)
+		col := col
+		go func() {
+			defer wg.Done()
+			col.Collect(ctx, resultCh)
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	var errs []error
+	var metrics []models.MetricModel
+
+Loop:
+	for {
+		select {
+		case <-ctx.Done():
+			errs = append(errs, ctx.Err())
+			break Loop
+		case res, ok := <-resultCh:
+			if !ok {
+				break Loop
+			}
+			if res.err != nil {
+				errs = append(errs, res.err)
+				continue
+			}
+			metrics = append(metrics, res.metric)
+		}
+	}
+
+	if ctx.Err() != nil {
+		errs = append(errs, fmt.Errorf("collection interrupted: %w", ctx.Err()))
+	}
+
+	if len(errs) > 0 {
+		s.metrics = nil
+		return errors.Join(errs...)
+	}
+
+	s.metrics = metrics
+
+	return nil
 }
 
-func (s *Stats) collect() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	runtime.ReadMemStats(s.memStats)
-	s.RandomValue = rand.Intn(maxRandNum)
-	s.PollCount++
-}
-
-func (s *Stats) dump() []*models.MetricModel {
+func (s *Stats) GetMetrics() []models.MetricModel {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	metrics := []*models.MetricModel{
-		models.NewMetricModel("Alloc", common.MetricTypeGauge, 0, float64(s.memStats.Alloc)),
-		models.NewMetricModel("BuckHashSys", common.MetricTypeGauge, 0, float64(s.memStats.BuckHashSys)),
-		models.NewMetricModel("Frees", common.MetricTypeGauge, 0, float64(s.memStats.Frees)),
-		models.NewMetricModel("GCCPUFraction", common.MetricTypeGauge, 0, s.memStats.GCCPUFraction),
-		models.NewMetricModel("GCSys", common.MetricTypeGauge, 0, float64(s.memStats.GCSys)),
-		models.NewMetricModel("HeapAlloc", common.MetricTypeGauge, 0, float64(s.memStats.HeapAlloc)),
-		models.NewMetricModel("HeapIdle", common.MetricTypeGauge, 0, float64(s.memStats.HeapIdle)),
-		models.NewMetricModel("HeapInuse", common.MetricTypeGauge, 0, float64(s.memStats.HeapInuse)),
-		models.NewMetricModel("HeapObjects", common.MetricTypeGauge, 0, float64(s.memStats.HeapObjects)),
-		models.NewMetricModel("HeapReleased", common.MetricTypeGauge, 0, float64(s.memStats.HeapReleased)),
-		models.NewMetricModel("HeapSys", common.MetricTypeGauge, 0, float64(s.memStats.HeapSys)),
-		models.NewMetricModel("LastGC", common.MetricTypeGauge, 0, float64(s.memStats.LastGC)),
-		models.NewMetricModel("Lookups", common.MetricTypeGauge, 0, float64(s.memStats.Lookups)),
-		models.NewMetricModel("MCacheInuse", common.MetricTypeGauge, 0, float64(s.memStats.MCacheInuse)),
-		models.NewMetricModel("MCacheSys", common.MetricTypeGauge, 0, float64(s.memStats.MCacheSys)),
-		models.NewMetricModel("MSpanInuse", common.MetricTypeGauge, 0, float64(s.memStats.MSpanInuse)),
-		models.NewMetricModel("MSpanSys", common.MetricTypeGauge, 0, float64(s.memStats.MSpanSys)),
-		models.NewMetricModel("Mallocs", common.MetricTypeGauge, 0, float64(s.memStats.Mallocs)),
-		models.NewMetricModel("NextGC", common.MetricTypeGauge, 0, float64(s.memStats.NextGC)),
-		models.NewMetricModel("NumForcedGC", common.MetricTypeGauge, 0, float64(s.memStats.NumForcedGC)),
-		models.NewMetricModel("NumGC", common.MetricTypeGauge, 0, float64(s.memStats.NumGC)),
-		models.NewMetricModel("OtherSys", common.MetricTypeGauge, 0, float64(s.memStats.OtherSys)),
-		models.NewMetricModel("PauseTotalNs", common.MetricTypeGauge, 0, float64(s.memStats.PauseTotalNs)),
-		models.NewMetricModel("StackInuse", common.MetricTypeGauge, 0, float64(s.memStats.StackInuse)),
-		models.NewMetricModel("StackSys", common.MetricTypeGauge, 0, float64(s.memStats.StackSys)),
-		models.NewMetricModel("Sys", common.MetricTypeGauge, 0, float64(s.memStats.Sys)),
-		models.NewMetricModel("TotalAlloc", common.MetricTypeGauge, 0, float64(s.memStats.TotalAlloc)),
+	metricsCopy := make([]models.MetricModel, len(s.metrics))
+	copy(metricsCopy, s.metrics)
 
-		models.NewMetricModel("RandomValue", common.MetricTypeGauge, 0, float64(s.RandomValue)),
-
-		models.NewMetricModel("PollCount", common.MetricTypeCounter, int64(s.PollCount), 0),
-	}
-	return metrics
+	return metricsCopy
 }
