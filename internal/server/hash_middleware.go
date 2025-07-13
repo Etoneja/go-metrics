@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/etoneja/go-metrics/internal/common"
+	"go.uber.org/zap"
 )
 
 type responseRecorder struct {
@@ -36,7 +37,10 @@ func (bmw *BaseMiddleware) HashMiddleware(hashKey string) func(http.Handler) htt
 
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				http.Error(w, "Failed read body", http.StatusInternalServerError)
+				bmw.logger.Error("failed to read body",
+					zap.Error(err),
+				)
+    			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
 
