@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"fmt"
 	"net/http"
+	"sync/atomic"
 	"time"
 )
 
@@ -26,6 +28,7 @@ func NewBaseClient() *BaseClient {
 type ConcurrentLimitedClient struct {
 	client    HTTPDoer
 	semaphore chan struct{}
+	closed    atomic.Bool
 }
 
 func NewConcurrentLimitedClient(client HTTPDoer, rateLimit uint) *ConcurrentLimitedClient {
@@ -36,6 +39,9 @@ func NewConcurrentLimitedClient(client HTTPDoer, rateLimit uint) *ConcurrentLimi
 }
 
 func (c *ConcurrentLimitedClient) Do(req *http.Request) (*http.Response, error) {
+	if c.closed.Load() {
+		return nil, fmt.Errorf("client is closed")
+	}
 	c.semaphore <- struct{}{}
 	defer func() {
 		<-c.semaphore
@@ -44,6 +50,10 @@ func (c *ConcurrentLimitedClient) Do(req *http.Request) (*http.Response, error) 
 }
 
 func (c *ConcurrentLimitedClient) Close() {
+	if c.closed.Swap(true) {
+		return
+	}
+
 	c.client.Close()
 	close(c.semaphore)
 }
