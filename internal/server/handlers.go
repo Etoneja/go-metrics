@@ -3,8 +3,8 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -41,7 +41,12 @@ func (bh *BaseHandler) MetricUpdateHandler() http.HandlerFunc {
 			}
 			_, err = bh.store.SetGauge(ctx, metricName, num)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				bh.logger.Error("failed to set metric",
+					zap.String("metricType", metricType),
+					zap.String("metricName", metricName),
+					zap.Error(err),
+				)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
 
@@ -53,7 +58,12 @@ func (bh *BaseHandler) MetricUpdateHandler() http.HandlerFunc {
 			}
 			_, err = bh.store.IncrementCounter(ctx, metricName, num)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				bh.logger.Error("failed to set metric",
+					zap.String("metricType", metricType),
+					zap.String("metricName", metricName),
+					zap.Error(err),
+				)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
 		} else {
@@ -76,25 +86,29 @@ func (bh *BaseHandler) MetricGetHandler() http.HandlerFunc {
 
 		var value any
 		var err error
-		var ok bool
 
 		ctx := r.Context()
 
 		switch metricType {
 		case common.MetricTypeGauge:
-			value, ok, err = bh.store.GetGauge(ctx, metricName)
+			value, err = bh.store.GetGauge(ctx, metricName)
 		case common.MetricTypeCounter:
-			value, ok, err = bh.store.GetCounter(ctx, metricName)
+			value, err = bh.store.GetCounter(ctx, metricName)
 		default:
 			http.Error(w, "Bad Request: bad metric type", http.StatusBadRequest)
 			return
 		}
-		if !ok {
-			http.Error(w, "Not found", http.StatusNotFound)
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			bh.logger.Error("failed to get metric",
+				zap.String("metricType", metricType),
+				zap.String("metricName", metricName),
+				zap.Error(err),
+			)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -109,7 +123,10 @@ func (bh *BaseHandler) MetricListHandler() http.HandlerFunc {
 
 		metrics, err := bh.store.GetAll(ctx)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			bh.logger.Error("failed to get metrics",
+				zap.Error(err),
+			)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 
@@ -159,7 +176,12 @@ func (bh *BaseHandler) MetricUpdateJSONHandler() http.HandlerFunc {
 
 			newValue, err := bh.store.SetGauge(ctx, metricModelRequest.ID, *metricModelRequest.Value)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				bh.logger.Error("failed to get metric",
+					zap.String("metricType", metricModelRequest.MType),
+					zap.String("metricName", metricModelRequest.ID),
+					zap.Error(err),
+				)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
 
@@ -173,7 +195,12 @@ func (bh *BaseHandler) MetricUpdateJSONHandler() http.HandlerFunc {
 
 			newValue, err := bh.store.IncrementCounter(ctx, metricModelRequest.ID, *metricModelRequest.Delta)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				bh.logger.Error("failed to get metric",
+					zap.String("metricType", metricModelRequest.MType),
+					zap.String("metricName", metricModelRequest.ID),
+					zap.Error(err),
+				)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
 
@@ -186,7 +213,10 @@ func (bh *BaseHandler) MetricUpdateJSONHandler() http.HandlerFunc {
 
 		resp, err := json.Marshal(metricModelResponse)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			bh.logger.Error("failed to marshal response",
+				zap.Error(err),
+			)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 
@@ -219,26 +249,36 @@ func (bh *BaseHandler) MetricGetJSONHandler() http.HandlerFunc {
 		ctx := r.Context()
 
 		if metricGetRequestModel.MType == common.MetricTypeGauge {
-			value, ok, err := bh.store.GetGauge(ctx, metricGetRequestModel.ID)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+			value, err := bh.store.GetGauge(ctx, metricGetRequestModel.ID)
+			if errors.Is(err, ErrNotFound) {
+				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			}
-			if !ok {
-				http.Error(w, "Not found", http.StatusNotFound)
+			if err != nil {
+				bh.logger.Error("failed to get metric",
+					zap.String("metricType", metricGetRequestModel.MType),
+					zap.String("metricName", metricGetRequestModel.ID),
+					zap.Error(err),
+				)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
 
 			metricModel = *models.NewMetricModel(metricGetRequestModel.ID, metricGetRequestModel.MType, 0, value)
 
 		} else if metricGetRequestModel.MType == common.MetricTypeCounter {
-			value, ok, err := bh.store.GetCounter(ctx, metricGetRequestModel.ID)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+			value, err := bh.store.GetCounter(ctx, metricGetRequestModel.ID)
+			if errors.Is(err, ErrNotFound) {
+				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			}
-			if !ok {
-				http.Error(w, "Not found", http.StatusNotFound)
+			if err != nil {
+				bh.logger.Error("failed to get metric",
+					zap.String("metricType", metricGetRequestModel.MType),
+					zap.String("metricName", metricGetRequestModel.ID),
+					zap.Error(err),
+				)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
 
@@ -251,7 +291,10 @@ func (bh *BaseHandler) MetricGetJSONHandler() http.HandlerFunc {
 
 		resp, err := json.Marshal(metricModel)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			bh.logger.Error("failed to marshal response",
+				zap.Error(err),
+			)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -267,8 +310,10 @@ func (bh *BaseHandler) PingHandler() http.HandlerFunc {
 		ctx := r.Context()
 		err := bh.store.Ping(ctx)
 		if err != nil {
-			log.Printf("failed to ping store %v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			bh.logger.Error("failed to ping store",
+				zap.Error(err),
+			)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -297,7 +342,10 @@ func (bh *BaseHandler) MetricBatchUpdateJSONHandler() http.HandlerFunc {
 
 		resp, err := json.Marshal(newMetrics)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			bh.logger.Error("failed to marshal response",
+				zap.Error(err),
+			)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 

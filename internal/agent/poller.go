@@ -12,10 +12,13 @@ type Poller struct {
 	pollInterval time.Duration
 }
 
-func (p *Poller) poll() {
+func (p *Poller) poll(ctx context.Context) {
 	p.iteration++
 	log.Println("Poll - start iteration", p.iteration)
-	p.stats.collect()
+	err := p.stats.collect(ctx)
+	if err != nil {
+		log.Printf("Error while polling: %v", err)
+	}
 }
 
 func (p *Poller) runRoutine(ctx context.Context) error {
@@ -27,7 +30,7 @@ func (p *Poller) runRoutine(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			p.poll()
+			p.poll(ctx)
 		}
 	}
 }

@@ -16,7 +16,7 @@ import (
 	"github.com/etoneja/go-metrics/internal/models"
 )
 
-func performRequest(ctx context.Context, client HTTPDoer, endpoint string, metrics []*models.MetricModel) error {
+func performRequest(ctx context.Context, client HTTPDoer, endpoint string, hashKey string, metrics []models.MetricModel) error {
 
 	url := buildURL(endpoint, "updates/")
 
@@ -35,10 +35,15 @@ func performRequest(ctx context.Context, client HTTPDoer, endpoint string, metri
 	gz.Close()
 
 	method := "POST"
-	req, err := http.NewRequest(method, url, &buf)
+	req, err := http.NewRequestWithContext(ctx, method, url, &buf)
 	if err != nil {
 		log.Printf("http.NewRequest failed: method=%s, url=%s, err=%v", method, url, err)
 		return fmt.Errorf("unexpected error - failed to create request: %w", err)
+	}
+
+	if hashKey != "" {
+		hash := common.СomputeHash(hashKey, buf.Bytes())
+		req.Header.Set(common.HashHeaderKey, hash)
 	}
 
 	req.Header.Set("Content-Encoding", "gzip")
@@ -84,23 +89,30 @@ type Reporter struct {
 	client         HTTPDoer
 	endpoint       string
 	reportInterval time.Duration
+	rateLimit      uint
+	hashKey        string
 }
 
 func (r *Reporter) report(ctx context.Context) {
 	r.iteration++
 	log.Println("Report - start iteration", r.iteration)
-	if r.stats.getCounter() == 0 {
-		log.Println("Stats not collected yet. Skip send")
+	metrics := r.stats.GetMetrics()
+
+	if len(metrics) == 0 {
+		log.Println("No metrics. Skip report")
 		return
 	}
-	metrics := r.stats.dump()
 
-	err := performRequest(ctx, r.client, r.endpoint, metrics)
+	err := performRequest(ctx, r.client, r.endpoint, r.hashKey, metrics)
 	if err != nil {
 		log.Printf("Error occurred sending metrcs %v", err)
 	}
 
 	log.Println("Report - finish iteration", r.iteration)
+}
+
+func (r *Reporter) stop() {
+	r.client.Close()
 }
 
 func (r *Reporter) runRoutine(ctx context.Context) error {
@@ -110,6 +122,7 @@ func (r *Reporter) runRoutine(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
+			r.stop()
 			return ctx.Err()
 		case <-ticker.C:
 			r.report(ctx)
@@ -117,14 +130,18 @@ func (r *Reporter) runRoutine(ctx context.Context) error {
 	}
 }
 
-func newReporter(stats *Stats, endpoint string, reportInterval time.Duration) *Reporter {
-	client := &http.Client{
-		Timeout: 10 * time.Second,
+func newReporter(stats *Stats, endpoint string, reportInterval time.Duration, rateLimit uint, hashKey string) *Reporter {
+	var client HTTPDoer
+	client = NewBaseClient()
+	if rateLimit > 0 {
+		client = NewConcurrentLimitedClient(client, rateLimit)
 	}
 	return &Reporter{
 		stats:          stats,
 		client:         client,
 		endpoint:       endpoint,
 		reportInterval: reportInterval,
+		rateLimit:      rateLimit,
+		hashKey:        hashKey,
 	}
 }

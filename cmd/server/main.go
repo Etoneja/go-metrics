@@ -30,7 +30,7 @@ func main() {
 		zap.Bool("Restore", cfg.Restore),
 	)
 
-	router := server.NewRouter(store)
+	router := server.NewRouter(store, cfg.HashKey)
 	srv := &http.Server{
 		Addr:    cfg.ServerAddress,
 		Handler: router,

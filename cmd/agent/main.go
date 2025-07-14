@@ -23,6 +23,7 @@ func main() {
 		zap.String("ServerEndpoint", cfg.ServerEndpoint),
 		zap.Uint("PollInterval", cfg.PollInterval),
 		zap.Uint("ReportInterval", cfg.ReportInterval),
+		zap.Uint("RateLimit", cfg.RateLimit),
 	)
 
 	service := agent.NewService(cfg)

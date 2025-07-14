@@ -30,7 +30,7 @@ func (r *loggingResponseWriter) WriteHeader(statusCode int) {
 
 func (bmw *BaseMiddleware) LoggerMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		logFn := func(w http.ResponseWriter, r *http.Request) {
+		fn := func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 
 			responseData := &responseData{
@@ -55,6 +55,6 @@ func (bmw *BaseMiddleware) LoggerMiddleware() func(http.Handler) http.Handler {
 
 		}
 
-		return http.HandlerFunc(logFn)
+		return http.HandlerFunc(fn)
 	}
 }
