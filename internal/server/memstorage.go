@@ -18,7 +18,7 @@ import (
 )
 
 type MemStorage struct {
-	mu sync.RWMutex
+	mu *sync.RWMutex
 
 	filePath           string
 	syncDump           bool
@@ -33,6 +33,7 @@ type MemStorage struct {
 
 func NewMemStorage() *MemStorage {
 	return &MemStorage{
+		mu:       &sync.RWMutex{},
 		stopChan: make(chan struct{}),
 		doneChan: make(chan struct{}),
 		gauge:    make(map[string]float64),

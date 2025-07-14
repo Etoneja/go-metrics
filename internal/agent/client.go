@@ -30,13 +30,14 @@ type ConcurrentLimitedClient struct {
 	semaphore chan struct{}
 
 	closed bool
-	mu     sync.Mutex
+	mu     *sync.Mutex
 }
 
 func NewConcurrentLimitedClient(client HTTPDoer, rateLimit uint) *ConcurrentLimitedClient {
 	return &ConcurrentLimitedClient{
 		client:    client,
 		semaphore: make(chan struct{}, rateLimit),
+		mu:        &sync.Mutex{},
 	}
 }
 

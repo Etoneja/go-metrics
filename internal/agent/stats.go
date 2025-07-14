@@ -10,16 +10,17 @@ import (
 )
 
 func newStats() *Stats {
-
-	return &Stats{collectors: []Collecter{
-		NewAnyCollector(),
-		NewMemCollector(),
-		NewPSCollector(),
-	}}
+	return &Stats{
+		mu: &sync.RWMutex{},
+		collectors: []Collecter{
+			NewAnyCollector(),
+			NewMemCollector(),
+			NewPSCollector(),
+		}}
 }
 
 type Stats struct {
-	mu         sync.RWMutex
+	mu         *sync.RWMutex
 	collectors []Collecter
 	metrics    []models.MetricModel
 }
