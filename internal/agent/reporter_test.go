@@ -13,7 +13,7 @@ import (
 )
 
 type mockClient struct {
-	mu       sync.Mutex
+	mu       *sync.Mutex
 	requests []*http.Request
 }
 
@@ -35,7 +35,7 @@ func TestReporter_report(t *testing.T) {
 	fakeEndpoint := "http://fake.com/"
 	stats := newStats()
 
-	mockCli := &mockClient{}
+	mockCli := &mockClient{mu: &sync.Mutex{}}
 	t.Run("test report", func(t *testing.T) {
 		r := &Reporter{
 			stats:          stats,
