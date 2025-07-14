@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ func TestPoller_poll(t *testing.T) {
 			},
 		},
 	}
+	ctx := context.Background()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &Poller{
@@ -30,12 +32,12 @@ func TestPoller_poll(t *testing.T) {
 				pollInterval: fakePollInterval,
 			}
 
-			assert.Equal(t, 0, tt.fields.stats.PollCount)
+			assert.Equal(t, 0, len(tt.fields.stats.metrics))
 			assert.Equal(t, uint(0), p.iteration)
 
-			p.poll()
+			p.poll(ctx)
 
-			assert.Equal(t, 1, tt.fields.stats.PollCount)
+			assert.NotEqual(t, 0, len(tt.fields.stats.metrics))
 			assert.Equal(t, uint(1), p.iteration)
 		})
 	}

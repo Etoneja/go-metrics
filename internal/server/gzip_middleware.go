@@ -67,7 +67,7 @@ func (w *gzipResponseWriter) Close() error {
 
 func (bmw *BaseMiddleware) GzipMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		logFn := func(w http.ResponseWriter, r *http.Request) {
+		fn := func(w http.ResponseWriter, r *http.Request) {
 			if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
 				gz, err := gzip.NewReader(r.Body)
 				if err != nil {
@@ -89,6 +89,6 @@ func (bmw *BaseMiddleware) GzipMiddleware() func(http.Handler) http.Handler {
 			next.ServeHTTP(&gzw, r)
 		}
 
-		return http.HandlerFunc(logFn)
+		return http.HandlerFunc(fn)
 	}
 }
