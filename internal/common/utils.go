@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -14,6 +15,14 @@ var DefaultBackoffSchedule = []time.Duration{
 	1 * time.Second,
 	3 * time.Second,
 	5 * time.Second,
+}
+
+func removeTrailingZeros(s string) string {
+	if strings.Contains(s, ".") {
+		s = strings.TrimRight(s, "0")
+		s = strings.TrimRight(s, ".")
+	}
+	return s
 }
 
 func AnyToString(v any) string {
@@ -27,7 +36,8 @@ func AnyToString(v any) string {
 	case float64:
 		return strconv.FormatFloat(v, 'f', -1, 64)
 	case float32:
-		return strconv.FormatFloat(float64(v), 'f', -1, 64)
+		s := strconv.FormatFloat(float64(v), 'f', -1, 32)
+		return removeTrailingZeros(s)
 	case string:
 		return v
 	default:
