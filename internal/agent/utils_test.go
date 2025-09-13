@@ -35,7 +35,7 @@ func TestEnsureEndpointProtocol(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ensureEndpointProtocol(tt.endpoint, tt.protocol)
 			if result != tt.expected {
-				t.Errorf("ensureEndpointProtocol(%q, %q) = %q, expected %q", 
+				t.Errorf("ensureEndpointProtocol(%q, %q) = %q, expected %q",
 					tt.endpoint, tt.protocol, result, tt.expected)
 			}
 		})
@@ -79,7 +79,7 @@ func TestBuildURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := buildURL(tt.endpoint, tt.parts...)
 			if result != tt.expected {
-				t.Errorf("buildURL(%q, %v) = %q, expected %q", 
+				t.Errorf("buildURL(%q, %v) = %q, expected %q",
 					tt.endpoint, tt.parts, result, tt.expected)
 			}
 		})

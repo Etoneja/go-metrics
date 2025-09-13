@@ -47,7 +47,7 @@ func TestNewMetricModel(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := NewMetricModel(tt.id, tt.mtype, tt.delta, tt.value)
-			
+
 			if result.ID != tt.expected.ID {
 				t.Errorf("ID = %s, want %s", result.ID, tt.expected.ID)
 			}

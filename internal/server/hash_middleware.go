@@ -40,7 +40,7 @@ func (bmw *BaseMiddleware) HashMiddleware(hashKey string) func(http.Handler) htt
 				bmw.logger.Error("failed to read body",
 					zap.Error(err),
 				)
-    			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
 
