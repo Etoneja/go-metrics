@@ -322,6 +322,36 @@ func (bh *BaseHandler) PingHandler() http.HandlerFunc {
 
 }
 
+// MetricBatchUpdateJSONHandler creates an HTTP handler for batch updating metrics in JSON format.
+//
+// The handler processes POST requests to /updates/ with a JSON array of metrics in the request body:
+//   [
+//     {
+//       "id": "string",         // metric identifier
+//       "type": "gauge|counter", // metric type
+//       "value": number,        // value for gauge metrics
+//       "delta": number         // value for counter metrics
+//     }
+//   ]
+//
+// Responses:
+//   - 200 OK: Returns the updated metrics array
+//   - 400 Bad Request: Invalid JSON format or malformed data
+//   - 500 Internal Server Error: Server-side processing error
+//
+// Example request:
+//   curl -X POST http://localhost:8080/updates/ \
+//     -H "Content-Type: application/json" \
+//     -d '[{"id":"cpu_usage","type":"gauge","value":95.5}]'
+//
+// Example response:
+//   [
+//     {
+//       "id": "cpu_usage",
+//       "type": "gauge",
+//       "value": 95.5
+//     }
+//   ]
 func (bh *BaseHandler) MetricBatchUpdateJSONHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
