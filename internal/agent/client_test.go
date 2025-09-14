@@ -38,7 +38,7 @@ func TestConcurrentLimitedClient_Do(t *testing.T) {
 			t.Errorf("Unexpected error: %v", err)
 		}
 		defer resp.Body.Close()
-		
+
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("Expected status 200, got %d", resp.StatusCode)
 		}
@@ -56,12 +56,15 @@ func TestConcurrentLimitedClient_Do(t *testing.T) {
 		defer limitedClient.Close()
 
 		req := httptest.NewRequest("GET", "http://example.com", nil)
-		_, err := limitedClient.Do(req)
+		resp, err := limitedClient.Do(req)
 
 		if err != expectedErr {
 			t.Errorf("Expected error %v, got %v", expectedErr, err)
 		}
 
+		if resp != nil && resp.Body != nil {
+			defer resp.Body.Close()
+		}
 	})
 
 	t.Run("request after client closed", func(t *testing.T) {
@@ -78,11 +81,14 @@ func TestConcurrentLimitedClient_Do(t *testing.T) {
 		limitedClient.Close()
 
 		req := httptest.NewRequest("GET", "http://example.com", nil)
-		_, err := limitedClient.Do(req)
+		resp, err := limitedClient.Do(req)
 
 		if err == nil || err.Error() != "client is closed" {
 			t.Errorf("Expected 'client is closed' error, got %v", err)
 		}
 
+		if resp != nil && resp.Body != nil {
+			defer resp.Body.Close()
+		}
 	})
 }
