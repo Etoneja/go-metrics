@@ -28,11 +28,15 @@ func performRequest(ctx context.Context, client HTTPDoer, endpoint string, hashK
 	var buf bytes.Buffer
 
 	gz := gzip.NewWriter(&buf)
-	_, err = gz.Write(rawData)
-	if err != nil {
+	defer func() {
+		if err := gz.Close(); err != nil {
+			log.Printf("failed to close gzip writer: %v", err)
+		}
+	}()
+
+	if _, err = gz.Write(rawData); err != nil {
 		return fmt.Errorf("unexpected error - failed to write gzip: %w", err)
 	}
-	gz.Close()
 
 	method := "POST"
 	req, err := http.NewRequestWithContext(ctx, method, url, &buf)
@@ -42,7 +46,7 @@ func performRequest(ctx context.Context, client HTTPDoer, endpoint string, hashK
 	}
 
 	if hashKey != "" {
-		hash := common.СomputeHash(hashKey, buf.Bytes())
+		hash := common.ComputeHash(hashKey, buf.Bytes())
 		req.Header.Set(common.HashHeaderKey, hash)
 	}
 
@@ -65,8 +69,14 @@ func performRequest(ctx context.Context, client HTTPDoer, endpoint string, hashK
 			continue
 		}
 
-		_, _ = io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
+		_, err = io.Copy(io.Discard, resp.Body)
+		if err != nil {
+			log.Printf("discard body error: %v", err)
+		}
+
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("close body error: %v", err)
+		}
 
 		if resp.StatusCode/100 == 2 {
 			log.Printf("%s Request to %s succeeded", attemptString, url)

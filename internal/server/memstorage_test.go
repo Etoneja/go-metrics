@@ -64,7 +64,10 @@ func TestMemStorage_IncrementCounter_Existing(t *testing.T) {
 	key := "test_counter"
 
 	// First increment
-	storage.IncrementCounter(context.Background(), key, 5)
+	_, err := storage.IncrementCounter(context.Background(), key, 5)
+	if err != nil {
+		t.Fatalf("Unexpected err: %v", err)
+	}
 
 	// Second increment
 	result, err := storage.IncrementCounter(context.Background(), key, 3)
@@ -80,8 +83,14 @@ func TestMemStorage_GetAll(t *testing.T) {
 	storage := NewMemStorage()
 
 	// Add some test data
-	storage.SetGauge(context.Background(), "gauge1", 1.0)
-	storage.IncrementCounter(context.Background(), "counter1", 1)
+	_, err := storage.SetGauge(context.Background(), "gauge1", 1.0)
+	if err != nil {
+		t.Fatalf("Unexpected err: %v", err)
+	}
+	_, err = storage.IncrementCounter(context.Background(), "counter1", 1)
+	if err != nil {
+		t.Fatalf("Unexpected err: %v", err)
+	}
 
 	metrics, err := storage.GetAll(context.Background())
 	if err != nil {
@@ -199,8 +208,14 @@ func TestMemStorage_GetSetIntegration(t *testing.T) {
 	expectedGauge := 99.9
 	expectedCounter := int64(42)
 
-	storage.SetGauge(context.Background(), "test_gauge", expectedGauge)
-	storage.IncrementCounter(context.Background(), "test_counter", expectedCounter)
+	_, err := storage.SetGauge(context.Background(), "test_gauge", expectedGauge)
+	if err != nil {
+		t.Fatalf("Unexpected err: %v", err)
+	}
+	_, err = storage.IncrementCounter(context.Background(), "test_counter", expectedCounter)
+	if err != nil {
+		t.Fatalf("Unexpected err: %v", err)
+	}
 
 	gaugeVal, err := storage.GetGauge(context.Background(), "test_gauge")
 	if err != nil {

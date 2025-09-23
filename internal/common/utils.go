@@ -76,7 +76,7 @@ func GetBackoffTicker(ctx context.Context, backoffSchedule []time.Duration) <-ch
 	return ticker
 }
 
-func СomputeHash(key string, data []byte) string {
+func ComputeHash(key string, data []byte) string {
 	h := hmac.New(sha256.New, []byte(key))
 	h.Write(data)
 	return hex.EncodeToString(h.Sum(nil))

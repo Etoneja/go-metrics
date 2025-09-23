@@ -52,7 +52,11 @@ func ExampleBaseHandler_MetricBatchUpdateJSONHandler_basic() {
 		fmt.Printf("Request failed: %v\n", err)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err = resp.Body.Close(); err != nil {
+			fmt.Printf("Failed to close response body: %v\n", err)
+		}
+	}()
 
 	var responseMetrics []map[string]any
 	err = json.NewDecoder(resp.Body).Decode(&responseMetrics)
@@ -142,7 +146,11 @@ func ExampleBaseHandler_MetricBatchUpdateJSONHandler_error() {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			fmt.Printf("Failed to close response body: %v\n", err)
+		}
+	}()
 
 	fmt.Printf("Error Status Code: %d\n", resp.StatusCode)
 

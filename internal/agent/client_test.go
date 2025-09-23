@@ -37,7 +37,11 @@ func TestConcurrentLimitedClient_Do(t *testing.T) {
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				t.Logf("Failed to close response body: %v", err)
+			}
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("Expected status 200, got %d", resp.StatusCode)
@@ -63,7 +67,11 @@ func TestConcurrentLimitedClient_Do(t *testing.T) {
 		}
 
 		if resp != nil && resp.Body != nil {
-			defer resp.Body.Close()
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					t.Logf("Failed to close response body: %v", err)
+				}
+			}()
 		}
 	})
 
@@ -88,7 +96,11 @@ func TestConcurrentLimitedClient_Do(t *testing.T) {
 		}
 
 		if resp != nil && resp.Body != nil {
-			defer resp.Body.Close()
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					t.Logf("Failed to close response body: %v", err)
+				}
+			}()
 		}
 	})
 }

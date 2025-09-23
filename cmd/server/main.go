@@ -16,7 +16,11 @@ func main() {
 	cfg := server.PrepareConfig()
 
 	logger.Init(false)
-	defer logger.Sync()
+	defer func() {
+		if err := logger.Sync(); err != nil {
+			logger.Get().Warn("failed to sync logger", zap.Error(err))
+		}
+	}()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
