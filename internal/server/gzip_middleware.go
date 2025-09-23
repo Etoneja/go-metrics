@@ -6,6 +6,8 @@ import (
 	"mime"
 	"net/http"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 var compressibleTypes = map[string]bool{
@@ -74,7 +76,12 @@ func (bmw *BaseMiddleware) GzipMiddleware() func(http.Handler) http.Handler {
 					http.Error(w, "Invalid gzip body", http.StatusBadRequest)
 					return
 				}
-				defer gz.Close()
+				defer func() {
+					if err := gz.Close(); err != nil {
+						bmw.logger.Warn("failed to close gzip reader", zap.Error(err))
+					}
+				}()
+
 				r.Body = gz
 			}
 
@@ -84,7 +91,11 @@ func (bmw *BaseMiddleware) GzipMiddleware() func(http.Handler) http.Handler {
 			}
 
 			gzw := gzipResponseWriter{ResponseWriter: w}
-			defer gzw.Close()
+			defer func() {
+				if err := gzw.Close(); err != nil {
+					bmw.logger.Warn("failed to close gzip response writer", zap.Error(err))
+				}
+			}()
 
 			next.ServeHTTP(&gzw, r)
 		}

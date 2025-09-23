@@ -53,7 +53,10 @@ func TestReporter_report(t *testing.T) {
 		assert.Equal(t, uint(1), r.iteration)
 		assert.Equal(t, 0, len(mockCli.requests))
 
-		stats.collect(ctx)
+		err := stats.collect(ctx)
+		if err != nil {
+			t.Fatalf("Unexpected err: %v", err)
+		}
 
 		// stats collected
 		r.report(ctx)
