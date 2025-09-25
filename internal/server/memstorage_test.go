@@ -2,10 +2,13 @@ package server
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/models"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMemStorage_NewMemStorage(t *testing.T) {
@@ -232,4 +235,54 @@ func TestMemStorage_GetSetIntegration(t *testing.T) {
 	if counterVal != expectedCounter {
 		t.Errorf("Expected counter %d, got %d", expectedCounter, counterVal)
 	}
+}
+
+func TestMemStorage_DumpAndLoad(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "test_dump_*.json")
+	require.NoError(t, err)
+	err = tmpFile.Close()
+	if err != nil {
+		t.Logf("Close temp file failed: %v", err)
+	}
+
+	defer func() {
+		removeErr := os.Remove(tmpFile.Name())
+		if removeErr != nil && !os.IsNotExist(removeErr) {
+			t.Logf("Remove temp file failed: %v", removeErr)
+		}
+	}()
+
+	ms := NewMemStorage()
+	ms.filePath = tmpFile.Name()
+
+	ms.mu.Lock()
+	ms.gauge["test_gauge"] = 123.45
+	ms.counter["test_counter"] = 42
+	ms.mu.Unlock()
+
+	err = ms.Dump()
+	require.NoError(t, err)
+
+	_, err = os.Stat(tmpFile.Name())
+	require.NoError(t, err)
+
+	sc := &StorageConfig{
+		FileStoragePath: tmpFile.Name(),
+		Restore:         true,
+	}
+	ms2 := NewMemStorageFromStorageConfig(sc)
+
+	ms2.mu.RLock()
+	assert.Equal(t, 123.45, ms2.gauge["test_gauge"])
+	assert.Equal(t, int64(42), ms2.counter["test_counter"])
+	ms2.mu.RUnlock()
+}
+
+func TestMemStorage_DumpError(t *testing.T) {
+	ms := NewMemStorage()
+	ms.filePath = "/invalid/path/dump.json"
+
+	err := ms.Dump()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create temp file")
 }
