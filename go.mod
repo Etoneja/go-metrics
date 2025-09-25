@@ -7,6 +7,7 @@ toolchain go1.24.3
 require (
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/go-chi/chi/v5 v5.2.1
+	github.com/golang/mock v1.6.0
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/shirou/gopsutil/v4 v4.25.6
 	github.com/stretchr/testify v1.11.1

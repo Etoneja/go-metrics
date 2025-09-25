@@ -6,11 +6,11 @@ import (
 
 func TestGetAnalyzers(t *testing.T) {
 	analyzers := GetAnalyzers()
-	
+
 	if len(analyzers) == 0 {
 		t.Fatal("Expected non-empty analyzers slice")
 	}
-	
+
 	t.Logf("Loaded %d analyzers", len(analyzers))
 }
 

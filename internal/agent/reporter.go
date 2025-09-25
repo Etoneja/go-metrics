@@ -29,7 +29,7 @@ func performRequest(ctx context.Context, client HTTPDoer, endpoint string, hashK
 
 	gz := gzip.NewWriter(&buf)
 	defer func() {
-		if err := gz.Close(); err != nil {
+		if err = gz.Close(); err != nil {
 			log.Printf("failed to close gzip writer: %v", err)
 		}
 	}()
