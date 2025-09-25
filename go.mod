@@ -9,7 +9,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/shirou/gopsutil/v4 v4.25.6
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/sync v0.13.0
 )
