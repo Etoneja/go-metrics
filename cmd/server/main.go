@@ -9,10 +9,13 @@ import (
 
 	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/etoneja/go-metrics/internal/server"
+	"github.com/etoneja/go-metrics/internal/version"
 	"go.uber.org/zap"
 )
 
 func main() {
+	version.Print()
+
 	cfg := server.PrepareConfig()
 
 	logger.Init(false)
