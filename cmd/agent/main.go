@@ -7,10 +7,13 @@ import (
 
 	"github.com/etoneja/go-metrics/internal/agent"
 	"github.com/etoneja/go-metrics/internal/logger"
+	"github.com/etoneja/go-metrics/internal/version"
 	"go.uber.org/zap"
 )
 
 func main() {
+	version.Print()
+
 	cfg := agent.PrepareConfig()
 
 	logger.Init(false)
