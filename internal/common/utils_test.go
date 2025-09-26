@@ -76,18 +76,18 @@ func TestComputeHash(t *testing.T) {
 	key := "secret"
 	data := []byte("hello world")
 
-	hash := СomputeHash(key, data)
+	hash := ComputeHash(key, data)
 
 	if len(hash) != 64 {
 		t.Errorf("Expected hash length 64, got %d", len(hash))
 	}
 
-	hash2 := СomputeHash(key, data)
+	hash2 := ComputeHash(key, data)
 	if hash != hash2 {
 		t.Error("Hashes should be identical for same input")
 	}
 
-	hash3 := СomputeHash(key, []byte("different"))
+	hash3 := ComputeHash(key, []byte("different"))
 	if hash == hash3 {
 		t.Error("Hashes should be different for different input")
 	}
@@ -97,14 +97,14 @@ func TestCompareHashes(t *testing.T) {
 	key := "secret"
 	data := []byte("test data")
 
-	hash1 := СomputeHash(key, data)
-	hash2 := СomputeHash(key, data)
+	hash1 := ComputeHash(key, data)
+	hash2 := ComputeHash(key, data)
 
 	if !CompareHashes(hash1, hash2) {
 		t.Error("Identical hashes should compare equal")
 	}
 
-	hash3 := СomputeHash(key, []byte("different"))
+	hash3 := ComputeHash(key, []byte("different"))
 	if CompareHashes(hash1, hash3) {
 		t.Error("Different hashes should not compare equal")
 	}

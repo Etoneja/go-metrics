@@ -260,7 +260,11 @@ func (dbs *DBStorage) BatchUpdate(ctx context.Context, metrics []models.MetricMo
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err = tx.Rollback(ctx); err != nil {
+			log.Printf("rollback error: %v", err)
+		}
+	}()
 
 	gaugeStmt, err := tx.Prepare(ctx, "insert-gauge", queryInsertGauge)
 	if err != nil {

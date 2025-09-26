@@ -50,11 +50,7 @@ type StorageConfig struct {
 func NewMemStorageFromStorageConfig(sc *StorageConfig) *MemStorage {
 	ms := NewMemStorage()
 
-	syncDump := false
-	if sc.StoreInterval == 0 {
-		syncDump = true
-	}
-	ms.syncDump = syncDump
+	ms.syncDump = sc.StoreInterval == 0
 	ms.filePath = sc.FileStoragePath
 
 	if sc.Restore {
@@ -64,7 +60,7 @@ func NewMemStorageFromStorageConfig(sc *StorageConfig) *MemStorage {
 		}
 	}
 
-	if !syncDump {
+	if !ms.syncDump {
 		ms.startPeriodicDump(sc.StoreInterval)
 	}
 
@@ -210,9 +206,14 @@ func (ms *MemStorage) dump() error {
 	}
 
 	defer func() {
-		file.Close()
+		if closeErr := file.Close(); closeErr != nil {
+			log.Printf("warning: failed to close temp file: %v", closeErr)
+		}
+
 		if err != nil {
-			os.Remove(tmpPath)
+			if removeErr := os.Remove(tmpPath); removeErr != nil && !os.IsNotExist(removeErr) {
+				log.Printf("warning: failed to remove temp file %s: %v", tmpPath, removeErr)
+			}
 		}
 	}()
 
@@ -247,7 +248,11 @@ func (ms *MemStorage) load() error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		if err = file.Close(); err != nil {
+			log.Printf("failed to close file: %v", err)
+		}
+	}()
 
 	decoder := json.NewDecoder(file)
 
@@ -260,11 +265,12 @@ func (ms *MemStorage) load() error {
 	log.Printf("Load %d entries", len(metrics))
 
 	for _, m := range metrics {
-		if m.MType == common.MetricTypeCounter {
-			ms.counter[m.ID] = *m.Delta
-		} else if m.MType == common.MetricTypeGauge {
+		switch m.MType {
+		case common.MetricTypeGauge:
 			ms.gauge[m.ID] = *m.Value
-		} else {
+		case common.MetricTypeCounter:
+			ms.counter[m.ID] = *m.Delta
+		default:
 			return fmt.Errorf("unknown metric type %s", m.MType)
 		}
 	}
@@ -344,7 +350,8 @@ func (ms *MemStorage) BatchUpdate(ctx context.Context, metrics []models.MetricMo
 
 	var err error
 	for _, m := range metrics {
-		if m.MType == common.MetricTypeCounter {
+		switch m.MType {
+		case common.MetricTypeCounter:
 			val, ok := ms.counter[m.ID]
 			if ok {
 				val += *m.Delta
@@ -353,12 +360,17 @@ func (ms *MemStorage) BatchUpdate(ctx context.Context, metrics []models.MetricMo
 			}
 			ms.counter[m.ID] = val
 			newMetrics = append(newMetrics, *models.NewMetricModel(m.ID, m.MType, *m.Delta, 0))
-		} else if m.MType == common.MetricTypeGauge {
+
+		case common.MetricTypeGauge:
 			val := *m.Value
 			ms.gauge[m.ID] = val
 			newMetrics = append(newMetrics, *models.NewMetricModel(m.ID, m.MType, 0, *m.Value))
-		} else {
+
+		default:
 			err = fmt.Errorf("bad metric type %s", m.MType)
+		}
+
+		if err != nil {
 			break
 		}
 	}

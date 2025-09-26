@@ -6,7 +6,24 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
+
+func TestNewBaseClient(t *testing.T) {
+	client := NewBaseClient()
+
+	if client == nil {
+		t.Fatal("Expected client instance, got nil")
+	}
+
+	if client.client == nil {
+		t.Fatal("Expected http client instance, got nil")
+	}
+
+	if client.client.Timeout != 10*time.Second {
+		t.Errorf("Expected timeout 10s, got %v", client.client.Timeout)
+	}
+}
 
 type MockHTTPDoer struct {
 	doFunc func(*http.Request) (*http.Response, error)
@@ -17,6 +34,62 @@ func (m *MockHTTPDoer) Do(req *http.Request) (*http.Response, error) {
 }
 
 func (m *MockHTTPDoer) Close() {}
+
+func TestBaseClient_Do(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer server.Close()
+
+	baseClient := &BaseClient{client: &http.Client{}}
+	req, _ := http.NewRequest("GET", server.URL, nil)
+
+	resp, err := baseClient.Do(req)
+	if err != nil {
+		t.Fatalf("Do failed: %v", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Failed to close response body: %v", err)
+		}
+	}()
+
+	if resp.StatusCode != 200 {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestBaseClient_Close(t *testing.T) {
+	baseClient := &BaseClient{client: &http.Client{}}
+	baseClient.Close()
+}
+
+func TestNewConcurrentLimitedClient(t *testing.T) {
+	mockClient := &MockHTTPDoer{
+		doFunc: func(req *http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200}, nil
+		},
+	}
+	rateLimit := uint(5)
+
+	client := NewConcurrentLimitedClient(mockClient, rateLimit)
+
+	if client == nil {
+		t.Fatal("Expected client instance, got nil")
+	}
+
+	if client.client != mockClient {
+		t.Error("Client not set correctly")
+	}
+
+	if cap(client.semaphore) != 5 {
+		t.Errorf("Expected semaphore capacity 5, got %d", cap(client.semaphore))
+	}
+
+	if client.mu == nil {
+		t.Fatal("Mutex should be initialized")
+	}
+}
 
 func TestConcurrentLimitedClient_Do(t *testing.T) {
 	t.Run("successful request", func(t *testing.T) {
@@ -37,7 +110,11 @@ func TestConcurrentLimitedClient_Do(t *testing.T) {
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				t.Logf("Failed to close response body: %v", err)
+			}
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("Expected status 200, got %d", resp.StatusCode)
@@ -63,7 +140,11 @@ func TestConcurrentLimitedClient_Do(t *testing.T) {
 		}
 
 		if resp != nil && resp.Body != nil {
-			defer resp.Body.Close()
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					t.Logf("Failed to close response body: %v", err)
+				}
+			}()
 		}
 	})
 
@@ -88,7 +169,11 @@ func TestConcurrentLimitedClient_Do(t *testing.T) {
 		}
 
 		if resp != nil && resp.Body != nil {
-			defer resp.Body.Close()
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					t.Logf("Failed to close response body: %v", err)
+				}
+			}()
 		}
 	})
 }

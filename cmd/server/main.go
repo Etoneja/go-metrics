@@ -9,14 +9,21 @@ import (
 
 	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/etoneja/go-metrics/internal/server"
+	"github.com/etoneja/go-metrics/internal/version"
 	"go.uber.org/zap"
 )
 
 func main() {
+	version.Print()
+
 	cfg := server.PrepareConfig()
 
 	logger.Init(false)
-	defer logger.Sync()
+	defer func() {
+		if err := logger.Sync(); err != nil {
+			logger.Get().Warn("failed to sync logger", zap.Error(err))
+		}
+	}()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

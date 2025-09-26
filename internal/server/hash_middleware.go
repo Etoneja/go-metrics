@@ -46,7 +46,7 @@ func (bmw *BaseMiddleware) HashMiddleware(hashKey string) func(http.Handler) htt
 
 			r.Body = io.NopCloser(bytes.NewBuffer(body))
 
-			expectedHash := common.СomputeHash(hashKey, body)
+			expectedHash := common.ComputeHash(hashKey, body)
 			if !common.CompareHashes(requestHash, expectedHash) {
 				http.Error(w, "Invalid request hash", http.StatusBadRequest)
 				return
@@ -60,7 +60,7 @@ func (bmw *BaseMiddleware) HashMiddleware(hashKey string) func(http.Handler) htt
 			next.ServeHTTP(recorder, r)
 
 			if recorder.body.Len() > 0 {
-				hash := common.СomputeHash(hashKey, recorder.body.Bytes())
+				hash := common.ComputeHash(hashKey, recorder.body.Bytes())
 				w.Header().Set(common.HashHeaderKey, hash)
 			}
 		}
