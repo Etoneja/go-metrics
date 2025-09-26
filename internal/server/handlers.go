@@ -19,6 +19,12 @@ type BaseHandler struct {
 	logger *zap.Logger
 }
 
+func (bh *BaseHandler) writeHTML(w http.ResponseWriter, s string) {
+	if _, err := fmt.Fprint(w, s); err != nil {
+		bh.logger.Warn("write response failed", zap.Error(err))
+	}
+}
+
 func (bh *BaseHandler) MetricUpdateHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -33,7 +39,8 @@ func (bh *BaseHandler) MetricUpdateHandler() http.HandlerFunc {
 
 		ctx := r.Context()
 
-		if metricType == common.MetricTypeGauge {
+		switch metricType {
+		case common.MetricTypeGauge:
 			num, err := strconv.ParseFloat(metricValue, 64)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -49,8 +56,7 @@ func (bh *BaseHandler) MetricUpdateHandler() http.HandlerFunc {
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
-
-		} else if metricType == common.MetricTypeCounter {
+		case common.MetricTypeCounter:
 			num, err := strconv.ParseInt(metricValue, 10, 64)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -66,7 +72,7 @@ func (bh *BaseHandler) MetricUpdateHandler() http.HandlerFunc {
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
-		} else {
+		default:
 			http.Error(w, "Bad Request: bad metric type", http.StatusBadRequest)
 			return
 		}
@@ -112,7 +118,7 @@ func (bh *BaseHandler) MetricGetHandler() http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "%v", value)
+		bh.writeHTML(w, fmt.Sprintf("%v", value))
 	}
 }
 
@@ -133,7 +139,7 @@ func (bh *BaseHandler) MetricListHandler() http.HandlerFunc {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 
-		fmt.Fprintln(w, "<html><body><pre>")
+		bh.writeHTML(w, "<html><body><pre>")
 
 		for _, m := range metrics {
 			var value string
@@ -142,10 +148,10 @@ func (bh *BaseHandler) MetricListHandler() http.HandlerFunc {
 			} else {
 				value = common.AnyToString(*m.Value)
 			}
-			fmt.Fprintf(w, "%s[%s]=%s\n", m.ID, m.MType, value)
+			bh.writeHTML(w, fmt.Sprintf("%s[%s]=%s\n", m.ID, m.MType, value))
 		}
 
-		fmt.Fprintln(w, "</pre></body></html>")
+		bh.writeHTML(w, "</pre></body></html>")
 
 	}
 }
@@ -168,7 +174,8 @@ func (bh *BaseHandler) MetricUpdateJSONHandler() http.HandlerFunc {
 
 		ctx := r.Context()
 
-		if metricModelRequest.MType == common.MetricTypeGauge {
+		switch metricModelRequest.MType {
+		case common.MetricTypeGauge:
 			if metricModelRequest.Value == nil {
 				http.Error(w, "Bad Request: missing value", http.StatusBadRequest)
 				return
@@ -186,8 +193,7 @@ func (bh *BaseHandler) MetricUpdateJSONHandler() http.HandlerFunc {
 			}
 
 			metricModelResponse = *models.NewMetricModel(metricModelRequest.ID, metricModelRequest.MType, 0, newValue)
-
-		} else if metricModelRequest.MType == common.MetricTypeCounter {
+		case common.MetricTypeCounter:
 			if metricModelRequest.Delta == nil {
 				http.Error(w, "Bad Request: missing delta", http.StatusBadRequest)
 				return
@@ -205,8 +211,7 @@ func (bh *BaseHandler) MetricUpdateJSONHandler() http.HandlerFunc {
 			}
 
 			metricModelResponse = *models.NewMetricModel(metricModelRequest.ID, metricModelRequest.MType, newValue, 0)
-
-		} else {
+		default:
 			http.Error(w, "Bad Request: bad metric type", http.StatusBadRequest)
 			return
 		}
@@ -222,7 +227,9 @@ func (bh *BaseHandler) MetricUpdateJSONHandler() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(resp)
+		if _, err := w.Write(resp); err != nil {
+			bh.logger.Warn("write response failed", zap.Error(err))
+		}
 
 	}
 
@@ -248,8 +255,10 @@ func (bh *BaseHandler) MetricGetJSONHandler() http.HandlerFunc {
 
 		ctx := r.Context()
 
-		if metricGetRequestModel.MType == common.MetricTypeGauge {
-			value, err := bh.store.GetGauge(ctx, metricGetRequestModel.ID)
+		switch metricGetRequestModel.MType {
+		case common.MetricTypeGauge:
+			value, errGetGauge := bh.store.GetGauge(ctx, metricGetRequestModel.ID)
+			err = errGetGauge
 			if errors.Is(err, ErrNotFound) {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
@@ -265,9 +274,9 @@ func (bh *BaseHandler) MetricGetJSONHandler() http.HandlerFunc {
 			}
 
 			metricModel = *models.NewMetricModel(metricGetRequestModel.ID, metricGetRequestModel.MType, 0, value)
-
-		} else if metricGetRequestModel.MType == common.MetricTypeCounter {
-			value, err := bh.store.GetCounter(ctx, metricGetRequestModel.ID)
+		case common.MetricTypeCounter:
+			value, errGetCounter := bh.store.GetCounter(ctx, metricGetRequestModel.ID)
+			err = errGetCounter
 			if errors.Is(err, ErrNotFound) {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
@@ -283,8 +292,7 @@ func (bh *BaseHandler) MetricGetJSONHandler() http.HandlerFunc {
 			}
 
 			metricModel = *models.NewMetricModel(metricGetRequestModel.ID, metricGetRequestModel.MType, value, 0)
-
-		} else {
+		default:
 			http.Error(w, "Bad Request: bad metric type", http.StatusBadRequest)
 			return
 		}
@@ -299,7 +307,9 @@ func (bh *BaseHandler) MetricGetJSONHandler() http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(resp)
+		if _, err := w.Write(resp); err != nil {
+			bh.logger.Warn("write response failed", zap.Error(err))
+		}
 
 	}
 
@@ -325,14 +335,15 @@ func (bh *BaseHandler) PingHandler() http.HandlerFunc {
 // MetricBatchUpdateJSONHandler creates an HTTP handler for batch updating metrics in JSON format.
 //
 // The handler processes POST requests to /updates/ with a JSON array of metrics in the request body:
-//   [
-//     {
-//       "id": "string",         // metric identifier
-//       "type": "gauge|counter", // metric type
-//       "value": number,        // value for gauge metrics
-//       "delta": number         // value for counter metrics
-//     }
-//   ]
+//
+//	[
+//	  {
+//	    "id": "string",         // metric identifier
+//	    "type": "gauge|counter", // metric type
+//	    "value": number,        // value for gauge metrics
+//	    "delta": number         // value for counter metrics
+//	  }
+//	]
 //
 // Responses:
 //   - 200 OK: Returns the updated metrics array
@@ -340,18 +351,20 @@ func (bh *BaseHandler) PingHandler() http.HandlerFunc {
 //   - 500 Internal Server Error: Server-side processing error
 //
 // Example request:
-//   curl -X POST http://localhost:8080/updates/ \
-//     -H "Content-Type: application/json" \
-//     -d '[{"id":"cpu_usage","type":"gauge","value":95.5}]'
+//
+//	curl -X POST http://localhost:8080/updates/ \
+//	  -H "Content-Type: application/json" \
+//	  -d '[{"id":"cpu_usage","type":"gauge","value":95.5}]'
 //
 // Example response:
-//   [
-//     {
-//       "id": "cpu_usage",
-//       "type": "gauge",
-//       "value": 95.5
-//     }
-//   ]
+//
+//	[
+//	  {
+//	    "id": "cpu_usage",
+//	    "type": "gauge",
+//	    "value": 95.5
+//	  }
+//	]
 func (bh *BaseHandler) MetricBatchUpdateJSONHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -381,7 +394,9 @@ func (bh *BaseHandler) MetricBatchUpdateJSONHandler() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(resp)
+		if _, err := w.Write(resp); err != nil {
+			bh.logger.Warn("write response failed", zap.Error(err))
+		}
 
 	}
 

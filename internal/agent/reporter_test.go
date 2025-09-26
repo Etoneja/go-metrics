@@ -53,7 +53,10 @@ func TestReporter_report(t *testing.T) {
 		assert.Equal(t, uint(1), r.iteration)
 		assert.Equal(t, 0, len(mockCli.requests))
 
-		stats.collect(ctx)
+		err := stats.collect(ctx)
+		if err != nil {
+			t.Fatalf("Unexpected err: %v", err)
+		}
 
 		// stats collected
 		r.report(ctx)
@@ -65,4 +68,42 @@ func TestReporter_report(t *testing.T) {
 		assert.Equal(t, http.MethodPost, req.Method)
 	})
 
+}
+
+func TestNewReporter(t *testing.T) {
+	stats := &Stats{}
+	endpoint := "http://localhost:8080"
+	reportInterval := 10 * time.Second
+	rateLimit := uint(5)
+	hashKey := "test-key"
+
+	reporter := newReporter(stats, endpoint, reportInterval, rateLimit, hashKey)
+
+	if reporter == nil {
+		t.Fatal("Expected reporter instance, got nil")
+	}
+
+	if reporter.stats != stats {
+		t.Error("Stats not set correctly")
+	}
+
+	if reporter.endpoint != endpoint {
+		t.Errorf("Expected endpoint %s, got %s", endpoint, reporter.endpoint)
+	}
+
+	if reporter.reportInterval != reportInterval {
+		t.Errorf("Expected report interval %v, got %v", reportInterval, reporter.reportInterval)
+	}
+
+	if reporter.rateLimit != rateLimit {
+		t.Errorf("Expected rate limit %d, got %d", rateLimit, reporter.rateLimit)
+	}
+
+	if reporter.hashKey != hashKey {
+		t.Errorf("Expected hash key %s, got %s", hashKey, reporter.hashKey)
+	}
+
+	if reporter.client == nil {
+		t.Error("Client should be initialized")
+	}
 }
