@@ -28,14 +28,12 @@ func performRequest(ctx context.Context, client HTTPDoer, endpoint string, hashK
 	var buf bytes.Buffer
 
 	gz := gzip.NewWriter(&buf)
-	defer func() {
-		if err = gz.Close(); err != nil {
-			log.Printf("failed to close gzip writer: %v", err)
-		}
-	}()
-
-	if _, err = gz.Write(rawData); err != nil {
+	_, err = gz.Write(rawData)
+	if err != nil {
 		return fmt.Errorf("unexpected error - failed to write gzip: %w", err)
+	}
+	if err = gz.Close(); err != nil {
+		return fmt.Errorf("failed to close gzip: %w", err)
 	}
 
 	method := "POST"
