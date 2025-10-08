@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/etoneja/go-metrics/internal/server"
 	"github.com/etoneja/go-metrics/internal/version"
@@ -25,6 +26,11 @@ func main() {
 		}
 	}()
 
+	privateKey, err := common.LoadPrivateKey(cfg.CryptoKey)
+	if err != nil {
+		logger.Get().Fatal("Failed to load private key:", zap.Error(err))
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -37,7 +43,7 @@ func main() {
 		zap.Bool("Restore", cfg.Restore),
 	)
 
-	router := server.NewRouter(store, cfg.HashKey)
+	router := server.NewRouter(store, cfg.HashKey, privateKey)
 	srv := &http.Server{
 		Addr:    cfg.ServerAddress,
 		Handler: router,

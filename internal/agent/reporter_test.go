@@ -77,7 +77,14 @@ func TestNewReporter(t *testing.T) {
 	rateLimit := uint(5)
 	hashKey := "test-key"
 
-	reporter := newReporter(stats, endpoint, reportInterval, rateLimit, hashKey)
+	cfg := &config{
+		ServerEndpoint: endpoint,
+		ReportInterval: 10,
+		RateLimit:      rateLimit,
+		HashKey:        hashKey,
+	}
+
+	reporter := newReporter(stats, cfg, nil)
 
 	if reporter == nil {
 		t.Fatal("Expected reporter instance, got nil")

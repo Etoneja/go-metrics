@@ -15,7 +15,7 @@ func TestNewService(t *testing.T) {
 		HashKey:        "test-key",
 	}
 
-	service := NewService(cfg)
+	service := NewService(cfg, nil)
 
 	if service == nil {
 		t.Fatal("Expected service instance, got nil")
@@ -44,7 +44,7 @@ func TestService_Run_ContextCancel(t *testing.T) {
 		ReportInterval: 100,
 		ServerEndpoint: "http://test",
 	}
-	service := NewService(cfg)
+	service := NewService(cfg, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
