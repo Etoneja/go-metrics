@@ -1,0 +1,7 @@
+{
+    "address": "localhost:8080",
+    "restore": false,
+    "store_interval": 300,
+    "store_file": "./dev/data.json",
+    "crypto_key": "./dev/sample_private.key"
+}

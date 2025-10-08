@@ -15,14 +15,12 @@ import (
 func main() {
 	version.Print()
 
-	cfg := agent.PrepareConfig()
-
 	logger.Init(false)
-	defer func() {
-		if err := logger.Sync(); err != nil {
-			logger.Get().Warn("failed to sync logger", zap.Error(err))
-		}
-	}()
+
+	cfg, err := agent.PrepareConfig()
+	if err != nil {
+		logger.Get().Fatal("Failed prepare config", zap.Error(err))
+	}
 
 	publicKey, err := common.LoadPublicKey(cfg.CryptoKey)
 	if err != nil {
@@ -37,6 +35,8 @@ func main() {
 		zap.Uint("PollInterval", cfg.PollInterval),
 		zap.Uint("ReportInterval", cfg.ReportInterval),
 		zap.Uint("RateLimit", cfg.RateLimit),
+		zap.String("CryptoKey", cfg.CryptoKey),
+		zap.String("ConfigFile", cfg.ConfigFile),
 	)
 
 	service := agent.NewService(cfg, publicKey)

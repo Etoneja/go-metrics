@@ -46,7 +46,10 @@ func TestPrepareConfigIntegration(t *testing.T) {
 	// Reset flags for clean test
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
-	cfg := PrepareConfig()
+	cfg, err := PrepareConfig()
+	if err != nil {
+		t.Fatalf("PrepareConfig failed: %v", err)
+	}
 
 	// env should take precedence over flags
 	if cfg.ServerEndpoint != "https://env-server:8080" {

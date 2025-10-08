@@ -96,7 +96,10 @@ func TestPrepareConfig_EnvPrecedence(t *testing.T) {
 			}
 
 			// Get config - env should override flags
-			cfg := PrepareConfig()
+			cfg, err := PrepareConfig()
+			if err != nil {
+				t.Fatalf("PrepareConfig failed: %v", err)
+			}
 
 			// Verify env precedence
 			if cfg.ServerAddress != tt.expectedConfig.ServerAddress {
@@ -141,7 +144,10 @@ func TestPrepareConfig_BoolEnv(t *testing.T) {
 			flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 			t.Setenv("RESTORE", tt.envValue)
 
-			cfg := PrepareConfig()
+			cfg, err := PrepareConfig()
+			if err != nil {
+				t.Fatalf("PrepareConfig failed: %v", err)
+			}
 
 			if cfg.Restore != tt.expected {
 				t.Errorf("Restore = %t, want %t for env value %s", cfg.Restore, tt.expected, tt.envValue)
