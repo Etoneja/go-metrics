@@ -13,6 +13,7 @@ type config struct {
 	ReportInterval uint   `env:"REPORT_INTERVAL"`
 	HashKey        string `env:"KEY"`
 	RateLimit      uint   `env:"RATE_LIMIT"`
+	CryptoKey      string `env:"CRYPTO_KEY"`
 }
 
 func normalizeConfig(cfg *config) {
@@ -33,6 +34,7 @@ func parseFlags(cfg *config) {
 	flag.UintVar(&cfg.ReportInterval, "r", 10, "report interval (seconds)")
 	flag.StringVar(&cfg.HashKey, "k", "", "Hash key")
 	flag.UintVar(&cfg.RateLimit, "l", 1, "Rate limit ")
+	flag.StringVar(&cfg.CryptoKey, "crypto-key", "", "Crypto key")
 	flag.Parse()
 }
 
