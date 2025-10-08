@@ -6,6 +6,7 @@ import (
 	"syscall"
 
 	"github.com/etoneja/go-metrics/internal/agent"
+	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/etoneja/go-metrics/internal/version"
 	"go.uber.org/zap"
@@ -23,6 +24,11 @@ func main() {
 		}
 	}()
 
+	publicKey, err := common.LoadPublicKey(cfg.CryptoKey)
+	if err != nil {
+		logger.Get().Fatal("Failed to load public key:", zap.Error(err))
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -33,8 +39,8 @@ func main() {
 		zap.Uint("RateLimit", cfg.RateLimit),
 	)
 
-	service := agent.NewService(cfg)
-	err := service.Run(ctx)
+	service := agent.NewService(cfg, publicKey)
+	err = service.Run(ctx)
 	if err != nil {
 		logger.Get().Info("Service stopped", zap.Error(err))
 	}

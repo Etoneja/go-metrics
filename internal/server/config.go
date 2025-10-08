@@ -14,6 +14,7 @@ type config struct {
 	Restore         bool   `env:"RESTORE"`
 	DatabaseDSN     string `env:"DATABASE_DSN"`
 	HashKey         string `env:"KEY"`
+	CryptoKey       string `env:"CRYPTO_KEY"`
 }
 
 func PrepareConfig() *config {
@@ -30,6 +31,7 @@ func parseFlags(cfg *config) {
 	flag.BoolVar(&cfg.Restore, "r", false, "restore dump (bool)")
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "database DSN")
 	flag.StringVar(&cfg.HashKey, "k", "", "Hash key")
+	flag.StringVar(&cfg.CryptoKey, "crypto-key", "", "Crypto key")
 	flag.Parse()
 }
 
