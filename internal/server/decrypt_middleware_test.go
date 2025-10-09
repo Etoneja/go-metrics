@@ -128,7 +128,10 @@ func TestDecryptMiddleware_DecryptAESError(t *testing.T) {
 	}))
 
 	encryptedAESKey := make([]byte, 256)
-	rand.Read(encryptedAESKey)
+	_, err := rand.Read(encryptedAESKey)
+	if err != nil {
+		t.Fatalf("Failed to generate random data: %v", err)
+	}
 	invalidPayload := []byte("invalid encrypted data")
 	encryptedData := append(encryptedAESKey, invalidPayload...)
 
