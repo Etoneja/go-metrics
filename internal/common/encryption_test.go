@@ -117,7 +117,11 @@ func TestLoadPrivateKey_InvalidPEM(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() {
+		if err = os.Remove(tmpfile.Name()); err != nil {
+			t.Logf("Failed to remove temp file: %v", err)
+		}
+	}()
 
 	tmpfile.WriteString("invalid pem data")
 	tmpfile.Close()
@@ -133,7 +137,11 @@ func TestLoadPrivateKey_UnsupportedFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() {
+		if err = os.Remove(tmpfile.Name()); err != nil {
+			t.Logf("Failed to remove temp file: %v", err)
+		}
+	}()
 
 	block := &pem.Block{
 		Type:  "PRIVATE KEY",
@@ -153,7 +161,11 @@ func TestLoadPrivateKey_NotRSAKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() {
+		if err = os.Remove(tmpfile.Name()); err != nil {
+			t.Logf("Failed to remove temp file: %v", err)
+		}
+	}()
 
 	priv, err := GenerateECPrivateKey()
 	if err != nil {
@@ -183,7 +195,11 @@ func TestLoadPublicKey_InvalidPEM(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() {
+		if err = os.Remove(tmpfile.Name()); err != nil {
+			t.Logf("Failed to remove temp file: %v", err)
+		}
+	}()
 
 	tmpfile.WriteString("invalid pem data")
 	tmpfile.Close()
@@ -199,7 +215,11 @@ func TestLoadPublicKey_UnsupportedFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() {
+		if err = os.Remove(tmpfile.Name()); err != nil {
+			t.Logf("Failed to remove temp file: %v", err)
+		}
+	}()
 
 	block := &pem.Block{
 		Type:  "PUBLIC KEY",
@@ -219,7 +239,11 @@ func TestLoadPublicKey_NotRSAKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() {
+		if err = os.Remove(tmpfile.Name()); err != nil {
+			t.Logf("Failed to remove temp file: %v", err)
+		}
+	}()
 
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

@@ -31,7 +31,11 @@ func (bmw *BaseMiddleware) DecryptMiddleware(privateKey *rsa.PrivateKey) func(ht
 				http.Error(w, "Failed to read request body", http.StatusBadRequest)
 				return
 			}
-			defer r.Body.Close()
+			defer func() {
+				if err = r.Body.Close(); err != nil {
+					bmw.logger.Warn("Failed to close request body", zap.Error(err))
+				}
+			}()
 
 			if len(encryptedData) == 0 {
 				next.ServeHTTP(w, r)

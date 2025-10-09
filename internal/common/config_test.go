@@ -34,12 +34,18 @@ func TestLoadJSONConfig_InvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() {
+		if err = os.Remove(tmpfile.Name()); err != nil {
+			t.Logf("Failed to remove temp file: %v", err)
+		}
+	}()
 
-	if _, err := tmpfile.WriteString(`{"name": "test", "port": }`); err != nil {
+	if _, err = tmpfile.WriteString(`{"name": "test", "port": }`); err != nil {
 		t.Fatal(err)
 	}
-	tmpfile.Close()
+	if err = tmpfile.Close(); err != nil {
+		t.Fatalf("Failed to close temp file: %v", err)
+	}
 
 	cfg := &TestConfig{}
 	err = LoadJSONConfig(cfg, tmpfile.Name())
@@ -53,7 +59,11 @@ func TestLoadJSONConfig_ValidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() {
+		if err = os.Remove(tmpfile.Name()); err != nil {
+			t.Logf("Failed to remove temp file: %v", err)
+		}
+	}()
 
 	expectedConfig := TestConfig{Name: "test", Port: 8080}
 	jsonData, err := json.Marshal(expectedConfig)
@@ -61,7 +71,7 @@ func TestLoadJSONConfig_ValidJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(tmpfile.Name(), jsonData, 0644); err != nil {
+	if err = os.WriteFile(tmpfile.Name(), jsonData, 0644); err != nil {
 		t.Fatal(err)
 	}
 
