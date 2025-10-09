@@ -79,7 +79,9 @@ func TestGzipMiddleware_NoAcceptEncoding(t *testing.T) {
 	bmw := BaseMiddleware{logger: zap.NewNop()}
 	middleware := bmw.GzipMiddleware()
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("test"))
+		if _, err := w.Write([]byte("test")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 
 	req := httptest.NewRequest("GET", "/", nil)
@@ -97,7 +99,9 @@ func TestGzipMiddleware_NonCompressibleContentType(t *testing.T) {
 	middleware := bmw.GzipMiddleware()
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png") // не сжимаемый тип
-		w.Write([]byte("test"))
+		if _, err := w.Write([]byte("test")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 
 	req := httptest.NewRequest("GET", "/", nil)

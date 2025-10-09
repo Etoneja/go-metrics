@@ -90,7 +90,9 @@ func TestHashMiddleware_ValidHash(t *testing.T) {
 	middleware := bmw.HashMiddleware(hashKey)
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
-		w.Write([]byte("response data"))
+		if _, err := w.Write([]byte("response data")); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 
 	req := httptest.NewRequest("POST", "/", bytes.NewReader(data))
@@ -117,7 +119,9 @@ func TestHashMiddleware_ResponseHash(t *testing.T) {
 	bmw := BaseMiddleware{logger: zap.NewNop()}
 	middleware := bmw.HashMiddleware(hashKey)
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(responseData)
+		if _, err := w.Write(responseData); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 
 	req := httptest.NewRequest("POST", "/", bytes.NewReader(data))
