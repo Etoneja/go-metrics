@@ -27,7 +27,7 @@ func main() {
 		logger.Get().Fatal("Failed to load public key:", zap.Error(err))
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
 	logger.Get().Info("Agent started",
