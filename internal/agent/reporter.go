@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,7 +17,7 @@ import (
 	"github.com/etoneja/go-metrics/internal/models"
 )
 
-func performRequest(ctx context.Context, client HTTPDoer, endpoint string, hashKey string, metrics []models.MetricModel) error {
+func performRequest(ctx context.Context, client HTTPDoer, endpoint string, publicKey *rsa.PublicKey, hashKey string, metrics []models.MetricModel) error {
 
 	url := buildURL(endpoint, "updates/")
 
@@ -41,6 +42,19 @@ func performRequest(ctx context.Context, client HTTPDoer, endpoint string, hashK
 	if err != nil {
 		log.Printf("http.NewRequest failed: method=%s, url=%s, err=%v", method, url, err)
 		return fmt.Errorf("unexpected error - failed to create request: %w", err)
+	}
+
+	if publicKey != nil {
+		encryptedData, err := common.EncryptHybrid(publicKey, buf.Bytes())
+		if err != nil {
+			return fmt.Errorf("failed to encrypt data: %w", err)
+		}
+
+		buf.Reset()
+		buf.Write(encryptedData)
+		req.Body = io.NopCloser(&buf)
+		req.ContentLength = int64(buf.Len())
+		req.Header.Set("X-Encrypted", "true")
 	}
 
 	if hashKey != "" {
@@ -99,6 +113,7 @@ type Reporter struct {
 	reportInterval time.Duration
 	rateLimit      uint
 	hashKey        string
+	publicKey      *rsa.PublicKey
 }
 
 func (r *Reporter) report(ctx context.Context) {
@@ -111,7 +126,7 @@ func (r *Reporter) report(ctx context.Context) {
 		return
 	}
 
-	err := performRequest(ctx, r.client, r.endpoint, r.hashKey, metrics)
+	err := performRequest(ctx, r.client, r.endpoint, r.publicKey, r.hashKey, metrics)
 	if err != nil {
 		log.Printf("Error occurred sending metrcs %v", err)
 	}
@@ -138,18 +153,21 @@ func (r *Reporter) runRoutine(ctx context.Context) error {
 	}
 }
 
-func newReporter(stats *Stats, endpoint string, reportInterval time.Duration, rateLimit uint, hashKey string) *Reporter {
+func newReporter(stats *Stats, cfg *config, publicKey *rsa.PublicKey) *Reporter {
+	reportDuration := time.Second * time.Duration(cfg.ReportInterval)
+
 	var client HTTPDoer
 	client = NewBaseClient()
-	if rateLimit > 0 {
-		client = NewConcurrentLimitedClient(client, rateLimit)
+	if cfg.RateLimit > 0 {
+		client = NewConcurrentLimitedClient(client, cfg.RateLimit)
 	}
 	return &Reporter{
 		stats:          stats,
 		client:         client,
-		endpoint:       endpoint,
-		reportInterval: reportInterval,
-		rateLimit:      rateLimit,
-		hashKey:        hashKey,
+		endpoint:       cfg.ServerEndpoint,
+		reportInterval: reportDuration,
+		rateLimit:      cfg.RateLimit,
+		hashKey:        cfg.HashKey,
+		publicKey:      publicKey,
 	}
 }

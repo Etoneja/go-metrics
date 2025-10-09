@@ -6,6 +6,7 @@ import (
 	"syscall"
 
 	"github.com/etoneja/go-metrics/internal/agent"
+	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/etoneja/go-metrics/internal/version"
 	"go.uber.org/zap"
@@ -14,16 +15,19 @@ import (
 func main() {
 	version.Print()
 
-	cfg := agent.PrepareConfig()
-
 	logger.Init(false)
-	defer func() {
-		if err := logger.Sync(); err != nil {
-			logger.Get().Warn("failed to sync logger", zap.Error(err))
-		}
-	}()
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	cfg, err := agent.PrepareConfig()
+	if err != nil {
+		logger.Get().Fatal("Failed prepare config", zap.Error(err))
+	}
+
+	publicKey, err := common.LoadPublicKey(cfg.CryptoKey)
+	if err != nil {
+		logger.Get().Fatal("Failed to load public key:", zap.Error(err))
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
 	logger.Get().Info("Agent started",
@@ -31,10 +35,12 @@ func main() {
 		zap.Uint("PollInterval", cfg.PollInterval),
 		zap.Uint("ReportInterval", cfg.ReportInterval),
 		zap.Uint("RateLimit", cfg.RateLimit),
+		zap.String("CryptoKey", cfg.CryptoKey),
+		zap.String("ConfigFile", cfg.ConfigFile),
 	)
 
-	service := agent.NewService(cfg)
-	err := service.Run(ctx)
+	service := agent.NewService(cfg, publicKey)
+	err = service.Run(ctx)
 	if err != nil {
 		logger.Get().Info("Service stopped", zap.Error(err))
 	}

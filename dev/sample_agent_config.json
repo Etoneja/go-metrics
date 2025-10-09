@@ -1,0 +1,6 @@
+{
+    "address": "localhost:8080",
+    "report_interval": 3,
+    "poll_interval": 5,
+    "crypto_key": "./dev/sample_public.key"
+}

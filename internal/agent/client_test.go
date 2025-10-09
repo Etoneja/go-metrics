@@ -175,5 +175,7 @@ func TestConcurrentLimitedClient_Do(t *testing.T) {
 				}
 			}()
 		}
+
+		limitedClient.Close()
 	})
 }

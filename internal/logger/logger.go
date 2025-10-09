@@ -37,10 +37,3 @@ func Init(debug bool) {
 func Get() *zap.Logger {
 	return globalLogger
 }
-
-func Sync() error {
-	if globalLogger != nil {
-		return globalLogger.Sync()
-	}
-	return nil
-}
