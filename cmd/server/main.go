@@ -29,7 +29,7 @@ func main() {
 		logger.Get().Fatal("Failed to load private key:", zap.Error(err))
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
 	store := server.NewStorageFromConfig(cfg)
