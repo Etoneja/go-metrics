@@ -5,6 +5,8 @@
 *.so
 *.dylib
 
+dev/certs/
+
 # Test binary, built with `go test -c`
 *.test
 
