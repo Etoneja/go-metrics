@@ -12,6 +12,19 @@ import (
 	"os"
 )
 
+type EncryptionError struct {
+	Operation string
+	Cause     error
+}
+
+func (e *EncryptionError) Error() string {
+	return fmt.Sprintf("encryption error in %s: %v", e.Operation, e.Cause)
+}
+
+func (e *EncryptionError) Unwrap() error {
+	return e.Cause
+}
+
 func LoadPrivateKey(keyPath string) (*rsa.PrivateKey, error) {
 	if keyPath == "" {
 		return nil, nil
@@ -75,32 +88,37 @@ func LoadPublicKey(keyPath string) (*rsa.PublicKey, error) {
 func DecryptAES(key, data []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, &EncryptionError{Operation: "create cipher", Cause: err}
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, err
+		return nil, &EncryptionError{Operation: "create GCM mode", Cause: err}
 	}
 
 	nonceSize := gcm.NonceSize()
 	if len(data) < nonceSize {
-		return nil, fmt.Errorf("ciphertext too short")
+		return nil, &EncryptionError{Operation: "validate ciphertext", Cause: fmt.Errorf("ciphertext too short: got %d bytes, need at least %d", len(data), nonceSize)}
 	}
 
 	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
-	return gcm.Open(nil, nonce, ciphertext, nil)
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, &EncryptionError{Operation: "decrypt data", Cause: err}
+	}
+
+	return plaintext, nil
 }
 
 func EncryptHybrid(publicKey *rsa.PublicKey, data []byte) ([]byte, error) {
-	aesKey := make([]byte, 32) // AES-256
+	aesKey := make([]byte, 32)
 	if _, err := rand.Read(aesKey); err != nil {
-		return nil, err
+		return nil, &EncryptionError{Operation: "AES key generation", Cause: err}
 	}
 
 	encryptedData, err := encryptAES(aesKey, data)
 	if err != nil {
-		return nil, err
+		return nil, &EncryptionError{Operation: "AES data encryption", Cause: err}
 	}
 
 	encryptedAESKey, err := rsa.EncryptOAEP(
@@ -111,7 +129,7 @@ func EncryptHybrid(publicKey *rsa.PublicKey, data []byte) ([]byte, error) {
 		nil,
 	)
 	if err != nil {
-		return nil, err
+		return nil, &EncryptionError{Operation: "RSA key encryption", Cause: err}
 	}
 
 	return append(encryptedAESKey, encryptedData...), nil
@@ -120,17 +138,17 @@ func EncryptHybrid(publicKey *rsa.PublicKey, data []byte) ([]byte, error) {
 func encryptAES(key, data []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, &EncryptionError{Operation: "create cipher", Cause: err}
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, err
+		return nil, &EncryptionError{Operation: "create GCM mode", Cause: err}
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err := rand.Read(nonce); err != nil {
-		return nil, err
+		return nil, &EncryptionError{Operation: "generate nonce", Cause: err}
 	}
 
 	return gcm.Seal(nonce, nonce, data, nil), nil
