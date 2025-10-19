@@ -11,28 +11,30 @@ import (
 )
 
 type config struct {
-	ServerAddress   string `env:"ADDRESS" json:"address"`
-	StoreInterval   uint   `env:"STORE_INTERVAL" json:"store_interval"`
-	FileStoragePath string `env:"FILE_STORAGE_PATH" json:"store_file"`
-	Restore         bool   `env:"RESTORE" json:"restore"`
-	DatabaseDSN     string `env:"DATABASE_DSN" json:"database_dsn"`
-	HashKey         string `env:"KEY" json:"-"`
-	CryptoKey       string `env:"CRYPTO_KEY" json:"crypto_key"`
-	ConfigFile      string `env:"CONFIG" json:"-"`
-	TrustedSubnet   string `env:"TRUSTED_SUBNET" json:"trusted_subnet"`
+	ServerAddress     string `env:"ADDRESS" json:"address"`
+	ServerGRPCAddress string `env:"GRPC_ADDRESS" json:"grpc_address"`
+	StoreInterval     uint   `env:"STORE_INTERVAL" json:"store_interval"`
+	FileStoragePath   string `env:"FILE_STORAGE_PATH" json:"store_file"`
+	Restore           bool   `env:"RESTORE" json:"restore"`
+	DatabaseDSN       string `env:"DATABASE_DSN" json:"database_dsn"`
+	HashKey           string `env:"KEY" json:"-"`
+	CryptoKey         string `env:"CRYPTO_KEY" json:"crypto_key"`
+	ConfigFile        string `env:"CONFIG" json:"-"`
+	TrustedSubnet     string `env:"TRUSTED_SUBNET" json:"trusted_subnet"`
 }
 
 func PrepareConfig() (*config, error) {
 	cfg := &config{
-		ServerAddress:   "localhost:8080",
-		StoreInterval:   300,
-		FileStoragePath: "data.json",
-		Restore:         false,
-		DatabaseDSN:     "",
-		HashKey:         "",
-		CryptoKey:       "",
-		ConfigFile:      "",
-		TrustedSubnet:   "",
+		ServerAddress:     "localhost:8080",
+		ServerGRPCAddress: "",
+		StoreInterval:     300,
+		FileStoragePath:   "data.json",
+		Restore:           false,
+		DatabaseDSN:       "",
+		HashKey:           "",
+		CryptoKey:         "",
+		ConfigFile:        "",
+		TrustedSubnet:     "",
 	}
 	parseFlags(cfg)
 
@@ -56,7 +58,8 @@ func PrepareConfig() (*config, error) {
 }
 
 func parseFlags(cfg *config) {
-	flag.StringVar(&cfg.ServerAddress, "a", cfg.ServerAddress, "address and port to start server")
+	flag.StringVar(&cfg.ServerAddress, "a", cfg.ServerAddress, "address and port to start http server")
+	flag.StringVar(&cfg.ServerGRPCAddress, "g", cfg.ServerGRPCAddress, "address and port to start grpc server")
 	flag.UintVar(&cfg.StoreInterval, "i", cfg.StoreInterval, "store interval (seconds)")
 	flag.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath, "data dump file path")
 	flag.BoolVar(&cfg.Restore, "r", cfg.Restore, "restore dump (bool)")

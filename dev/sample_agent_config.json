@@ -1,5 +1,6 @@
 {
     "address": "localhost:8080",
+    "protocol": "http",
     "report_interval": 3,
     "poll_interval": 5,
     "crypto_key": "./dev/certs/sample_public.key"

@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package metrics;
+
+option go_package = "/internal/proto";
+
+service MetricsService {
+  rpc BatchUpdate(BatchUpdateRequest) returns (BatchUpdateResponse);
+  rpc Ping(PingRequest) returns (PingResponse);
+  rpc ListMetrics(ListMetricsRequest) returns (ListMetricsResponse);
+}
+
+message Metric {
+  string id = 1;
+  string type = 2;
+  optional int64 delta = 3;
+  optional double value = 4;
+}
+
+message BatchUpdateRequest {
+  repeated Metric metrics = 1;
+}
+
+message BatchUpdateResponse {
+  repeated Metric metrics = 1;
+}
+
+message PingRequest {}
+
+message PingResponse {
+  bool success = 1;
+}
+
+message ListMetricsRequest {}
+
+message ListMetricsResponse {
+  repeated Metric metrics = 1;
+}

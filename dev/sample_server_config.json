@@ -1,6 +1,6 @@
 {
     "address": "localhost:8080",
-    "protocol": "http",
+    "grpc_address": "localhost:8081",
     "restore": false,
     "store_interval": 300,
     "store_file": "./dev/data.json",
