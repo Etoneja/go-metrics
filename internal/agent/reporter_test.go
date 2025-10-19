@@ -132,7 +132,7 @@ func TestPerformRequest_Success(t *testing.T) {
 		*models.NewMetricModel("test", common.MetricTypeGauge, 0, float64(1.0)),
 	}
 
-	err := performRequest(context.Background(), client, "http://test", nil, "", metrics)
+	err := performRequest(context.Background(), client, "http://test", nil, "", nil, metrics)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestPerformRequest_WithHash(t *testing.T) {
 		*models.NewMetricModel("test", common.MetricTypeGauge, 0, float64(1.0)),
 	}
 
-	err := performRequest(context.Background(), client, "http://test", nil, "secret", metrics)
+	err := performRequest(context.Background(), client, "http://test", nil, "secret", nil, metrics)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestPerformRequest_WithEncryption(t *testing.T) {
 		*models.NewMetricModel("test", common.MetricTypeGauge, 0, float64(1.0)),
 	}
 
-	err = performRequest(context.Background(), client, "http://test", &privKey.PublicKey, "", metrics)
+	err = performRequest(context.Background(), client, "http://test", &privKey.PublicKey, "", nil, metrics)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestPerformRequest_5xxRetry(t *testing.T) {
 		*models.NewMetricModel("test", common.MetricTypeGauge, 0, float64(1.0)),
 	}
 
-	err := performRequest(context.Background(), client, "http://test", nil, "", metrics)
+	err := performRequest(context.Background(), client, "http://test", nil, "", nil, metrics)
 	if err != nil {
 		t.Errorf("Unexpected error after retry: %v", err)
 	}
@@ -238,7 +238,7 @@ func TestPerformRequest_4xxError(t *testing.T) {
 		*models.NewMetricModel("test", common.MetricTypeGauge, 0, float64(1.0)),
 	}
 
-	err := performRequest(context.Background(), client, "http://test", nil, "", metrics)
+	err := performRequest(context.Background(), client, "http://test", nil, "", nil, metrics)
 	if err == nil {
 		t.Error("Expected error for 4xx status")
 	}
@@ -268,7 +268,7 @@ func TestPerformRequest_NetworkErrorWithRetry(t *testing.T) {
 		*models.NewMetricModel("test", common.MetricTypeGauge, 0, float64(1.0)),
 	}
 
-	err := performRequest(context.Background(), client, "http://test", nil, "", metrics)
+	err := performRequest(context.Background(), client, "http://test", nil, "", nil, metrics)
 	if err != nil {
 		t.Errorf("Unexpected error after retry: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestPerformRequest_AllAttemptsFail(t *testing.T) {
 		*models.NewMetricModel("test", common.MetricTypeGauge, 0, float64(1.0)),
 	}
 
-	err := performRequest(context.Background(), client, "http://test", nil, "", metrics)
+	err := performRequest(context.Background(), client, "http://test", nil, "", nil, metrics)
 	if err == nil {
 		t.Error("Expected error after all attempts failed")
 	}

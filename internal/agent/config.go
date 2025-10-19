@@ -2,6 +2,7 @@ package agent
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/caarlos0/env/v11"
@@ -10,6 +11,7 @@ import (
 
 type config struct {
 	ServerEndpoint string `env:"ADDRESS" json:"address"`
+	ServerProtocol string `env:"PROTOCOL" json:"protocol"`
 	PollInterval   uint   `env:"POLL_INTERVAL" json:"poll_interval"`
 	ReportInterval uint   `env:"REPORT_INTERVAL" json:"report_interval"`
 	HashKey        string `env:"KEY" json:"-"`
@@ -18,13 +20,10 @@ type config struct {
 	ConfigFile     string `env:"CONFIG" json:"-"`
 }
 
-func normalizeConfig(cfg *config) {
-	cfg.ServerEndpoint = ensureEndpointProtocol(cfg.ServerEndpoint, defaultServerEndpointProtocol)
-}
-
 func PrepareConfig() (*config, error) {
 	cfg := &config{
-		ServerEndpoint: "http://localhost:8080",
+		ServerEndpoint: "localhost:8080",
+		ServerProtocol: "http",
 		PollInterval:   2,
 		ReportInterval: 10,
 		HashKey:        "",
@@ -46,12 +45,16 @@ func PrepareConfig() (*config, error) {
 	if err != nil {
 		return nil, err
 	}
-	normalizeConfig(cfg)
+	err = validateConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
 	return cfg, nil
 }
 
 func parseFlags(cfg *config) {
 	flag.StringVar(&cfg.ServerEndpoint, "a", cfg.ServerEndpoint, "address and port to send metrics")
+	flag.StringVar(&cfg.ServerProtocol, "protocol", cfg.ServerProtocol, "server protocol to send metrics")
 	flag.UintVar(&cfg.PollInterval, "p", cfg.PollInterval, "poll interval (seconds)")
 	flag.UintVar(&cfg.ReportInterval, "r", cfg.ReportInterval, "report interval (seconds)")
 	flag.StringVar(&cfg.HashKey, "k", cfg.HashKey, "Hash key")
@@ -66,6 +69,17 @@ func parseEnvOpts(cfg *config) error {
 	err := env.Parse(cfg)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateConfig(cfg *config) error {
+	validProtocols := map[string]struct{}{
+		"http": {},
+	}
+
+	if _, valid := validProtocols[cfg.ServerProtocol]; !valid {
+		return fmt.Errorf("invalid protocol '%s'", cfg.ServerProtocol)
 	}
 	return nil
 }

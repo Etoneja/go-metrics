@@ -41,9 +41,10 @@ func main() {
 		zap.Bool("Restore", cfg.Restore),
 		zap.String("CryptoKey", cfg.CryptoKey),
 		zap.String("ConfigFile", cfg.ConfigFile),
+		zap.String("TrustedSubnet", cfg.TrustedSubnet),
 	)
 
-	router := server.NewRouter(store, cfg.HashKey, privateKey)
+	router := server.NewRouter(store, cfg.HashKey, privateKey, cfg.TrustedSubnet)
 	srv := &http.Server{
 		Addr:    cfg.ServerAddress,
 		Handler: router,

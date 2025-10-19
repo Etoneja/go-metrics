@@ -32,6 +32,7 @@ func main() {
 
 	logger.Get().Info("Agent started",
 		zap.String("ServerEndpoint", cfg.ServerEndpoint),
+		zap.String("ServerProtocol", cfg.ServerProtocol),
 		zap.Uint("PollInterval", cfg.PollInterval),
 		zap.Uint("ReportInterval", cfg.ReportInterval),
 		zap.Uint("RateLimit", cfg.RateLimit),

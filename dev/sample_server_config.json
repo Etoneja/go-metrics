@@ -1,7 +1,9 @@
 {
     "address": "localhost:8080",
+    "protocol": "http",
     "restore": false,
     "store_interval": 300,
     "store_file": "./dev/data.json",
-    "crypto_key": "./dev/sample_private.key"
+    "crypto_key": "./dev/certs/sample_private.key",
+    "trusted_subnet": ""
 }

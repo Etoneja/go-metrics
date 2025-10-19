@@ -2,6 +2,8 @@ package server
 
 import (
 	"flag"
+	"fmt"
+	"net"
 	"os"
 
 	"github.com/caarlos0/env/v11"
@@ -17,6 +19,7 @@ type config struct {
 	HashKey         string `env:"KEY" json:"-"`
 	CryptoKey       string `env:"CRYPTO_KEY" json:"crypto_key"`
 	ConfigFile      string `env:"CONFIG" json:"-"`
+	TrustedSubnet   string `env:"TRUSTED_SUBNET" json:"trusted_subnet"`
 }
 
 func PrepareConfig() (*config, error) {
@@ -29,6 +32,7 @@ func PrepareConfig() (*config, error) {
 		HashKey:         "",
 		CryptoKey:       "",
 		ConfigFile:      "",
+		TrustedSubnet:   "",
 	}
 	parseFlags(cfg)
 
@@ -41,6 +45,10 @@ func PrepareConfig() (*config, error) {
 	parseFlags(cfg)
 
 	err = parseEnvOpts(cfg)
+	if err != nil {
+		return nil, err
+	}
+	err = validateConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -57,6 +65,7 @@ func parseFlags(cfg *config) {
 	flag.StringVar(&cfg.CryptoKey, "crypto-key", cfg.CryptoKey, "Crypto key")
 	flag.StringVar(&cfg.ConfigFile, "c", "", "Config file path")
 	flag.StringVar(&cfg.ConfigFile, "config", "", "Config file path")
+	flag.StringVar(&cfg.TrustedSubnet, "t", cfg.TrustedSubnet, "Trusted subnet")
 	flag.Parse()
 }
 
@@ -64,6 +73,16 @@ func parseEnvOpts(cfg *config) error {
 	err := env.Parse(cfg)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateConfig(cfg *config) error {
+	if cfg.TrustedSubnet != "" {
+		_, _, err := net.ParseCIDR(cfg.TrustedSubnet)
+		if err != nil {
+			return fmt.Errorf("invalid trusted subnet format '%s': %w", cfg.TrustedSubnet, err)
+		}
 	}
 	return nil
 }

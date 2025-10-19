@@ -19,7 +19,7 @@ import (
 func ExampleBaseHandler_MetricBatchUpdateJSONHandler_basic() {
 
 	storage := NewMemStorage()
-	router := NewRouter(storage, "", nil)
+	router := NewRouter(storage, "", nil, "")
 	server := httptest.NewServer(router)
 	defer server.Close()
 

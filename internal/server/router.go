@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(store Storager, hashKey string, privateKey *rsa.PrivateKey) http.Handler {
+func NewRouter(store Storager, hashKey string, privateKey *rsa.PrivateKey, trustedSubnet string) http.Handler {
 	r := chi.NewRouter()
 
 	lg := logger.Get()
@@ -16,6 +16,7 @@ func NewRouter(store Storager, hashKey string, privateKey *rsa.PrivateKey) http.
 	bmw := BaseMiddleware{logger: lg}
 
 	r.Use(bmw.LoggerMiddleware())
+	r.Use(bmw.TrustedIPMiddleware(trustedSubnet))
 	r.Use(bmw.DecryptMiddleware(privateKey))
 	r.Use(bmw.HashMiddleware(hashKey))
 	r.Use(bmw.GzipMiddleware())

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"time"
 
@@ -17,7 +18,14 @@ import (
 	"github.com/etoneja/go-metrics/internal/models"
 )
 
-func performRequest(ctx context.Context, client HTTPDoer, endpoint string, publicKey *rsa.PublicKey, hashKey string, metrics []models.MetricModel) error {
+func performRequest(ctx context.Context,
+	client HTTPDoer,
+	endpoint string,
+	publicKey *rsa.PublicKey,
+	hashKey string,
+	ip net.IP,
+	metrics []models.MetricModel,
+) error {
 
 	url := buildURL(endpoint, "updates/")
 
@@ -42,6 +50,10 @@ func performRequest(ctx context.Context, client HTTPDoer, endpoint string, publi
 	if err != nil {
 		log.Printf("http.NewRequest failed: method=%s, url=%s, err=%v", method, url, err)
 		return fmt.Errorf("unexpected error - failed to create request: %w", err)
+	}
+
+	if ip != nil {
+		req.Header.Set("X-Real-IP", ip.String())
 	}
 
 	if publicKey != nil {
@@ -110,10 +122,27 @@ type Reporter struct {
 	iteration      uint
 	client         HTTPDoer
 	endpoint       string
+	protocol       string
 	reportInterval time.Duration
 	rateLimit      uint
 	hashKey        string
 	publicKey      *rsa.PublicKey
+	localIP        net.IP
+}
+
+func (r *Reporter) getLocalIP() net.IP {
+	if r.localIP != nil {
+		return r.localIP
+	}
+
+	ip, err := getOutboundIP(r.endpoint)
+	if err != nil {
+		log.Printf("Failed to get outbound IP: %v", err)
+		return nil
+	}
+
+	r.localIP = ip
+	return r.localIP
 }
 
 func (r *Reporter) report(ctx context.Context) {
@@ -126,7 +155,9 @@ func (r *Reporter) report(ctx context.Context) {
 		return
 	}
 
-	err := performRequest(ctx, r.client, r.endpoint, r.publicKey, r.hashKey, metrics)
+	endpoint := ensureEndpointProtocol(r.endpoint, r.protocol)
+
+	err := performRequest(ctx, r.client, endpoint, r.publicKey, r.hashKey, r.getLocalIP(), metrics)
 	if err != nil {
 		log.Printf("Error occurred sending metrcs %v", err)
 	}
@@ -161,13 +192,30 @@ func newReporter(stats *Stats, cfg *config, publicKey *rsa.PublicKey) *Reporter 
 	if cfg.RateLimit > 0 {
 		client = NewConcurrentLimitedClient(client, cfg.RateLimit)
 	}
+
 	return &Reporter{
 		stats:          stats,
 		client:         client,
 		endpoint:       cfg.ServerEndpoint,
+		protocol:       cfg.ServerProtocol,
 		reportInterval: reportDuration,
 		rateLimit:      cfg.RateLimit,
 		hashKey:        cfg.HashKey,
 		publicKey:      publicKey,
 	}
+}
+
+func getOutboundIP(endpoint string) (net.IP, error) {
+	conn, err := net.Dial("udp", endpoint)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Failed to close UDP connection: %v", err)
+		}
+	}()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP, nil
 }
