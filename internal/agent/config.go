@@ -23,7 +23,7 @@ type config struct {
 func PrepareConfig() (*config, error) {
 	cfg := &config{
 		ServerEndpoint: "localhost:8080",
-		ServerProtocol: "http",
+		ServerProtocol: defaultServerEndpointProtocol,
 		PollInterval:   2,
 		ReportInterval: 10,
 		HashKey:        "",

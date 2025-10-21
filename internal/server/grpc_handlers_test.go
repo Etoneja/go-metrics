@@ -180,10 +180,10 @@ func TestGRPCServer_BatchUpdate(t *testing.T) {
 				}
 			} else {
 				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
+					t.Fatalf("Unexpected error: %v", err)
 				}
 				if resp == nil {
-					t.Error("Expected response, got nil")
+					t.Fatal("Expected response, got nil")
 				}
 				if len(resp.Metrics) != len(tt.requestMetrics) {
 					t.Errorf("Expected %d metrics in response, got %d", len(tt.requestMetrics), len(resp.Metrics))
