@@ -40,7 +40,10 @@ func main() {
 		zap.String("ConfigFile", cfg.ConfigFile),
 	)
 
-	service := agent.NewService(cfg, publicKey)
+	service, err := agent.NewService(cfg, publicKey)
+	if err != nil {
+		logger.Get().Fatal("Failed to create service:", zap.Error(err))
+	}
 	err = service.Run(ctx)
 	if err != nil {
 		logger.Get().Info("Service stopped", zap.Error(err))

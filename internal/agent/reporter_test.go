@@ -90,12 +90,16 @@ func TestNewReporter(t *testing.T) {
 
 	cfg := &config{
 		ServerEndpoint: endpoint,
+		ServerProtocol: "http",
 		ReportInterval: 10,
 		RateLimit:      rateLimit,
 		HashKey:        hashKey,
 	}
 
-	reporter := newReporter(stats, cfg, nil)
+	reporter, err := newReporter(stats, cfg, nil)
+	if err != nil {
+		t.Fatalf("Expected reporter instance, got error: %v", err)
+	}
 
 	if reporter == nil {
 		t.Fatal("Expected reporter instance, got nil")

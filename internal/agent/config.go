@@ -76,6 +76,7 @@ func parseEnvOpts(cfg *config) error {
 func validateConfig(cfg *config) error {
 	validProtocols := map[string]struct{}{
 		"http": {},
+		"grpc": {},
 	}
 
 	if _, valid := validProtocols[cfg.ServerProtocol]; !valid {

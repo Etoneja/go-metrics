@@ -121,6 +121,7 @@ type Reporter struct {
 	stats          *Stats
 	iteration      uint
 	client         HTTPDoer
+	grpcClient     *GRPCClient
 	endpoint       string
 	protocol       string
 	reportInterval time.Duration
@@ -155,9 +156,14 @@ func (r *Reporter) report(ctx context.Context) {
 		return
 	}
 
-	endpoint := ensureEndpointProtocol(r.endpoint, r.protocol)
+	var err error
+	if r.protocol == "grpc" {
+		err = r.grpcClient.PerformRequest(ctx, r.getLocalIP(), metrics)
+	} else {
+		endpoint := ensureEndpointProtocol(r.endpoint, r.protocol)
+		err = performRequest(ctx, r.client, endpoint, r.publicKey, r.hashKey, r.getLocalIP(), metrics)
+	}
 
-	err := performRequest(ctx, r.client, endpoint, r.publicKey, r.hashKey, r.getLocalIP(), metrics)
 	if err != nil {
 		log.Printf("Error occurred sending metrcs %v", err)
 	}
@@ -167,6 +173,11 @@ func (r *Reporter) report(ctx context.Context) {
 
 func (r *Reporter) stop() {
 	r.client.Close()
+	if r.grpcClient != nil {
+		if err := r.grpcClient.Close(); err != nil {
+			log.Printf("Failed to close gRPC client: %v", err)
+		}
+	}
 }
 
 func (r *Reporter) runRoutine(ctx context.Context) error {
@@ -184,7 +195,7 @@ func (r *Reporter) runRoutine(ctx context.Context) error {
 	}
 }
 
-func newReporter(stats *Stats, cfg *config, publicKey *rsa.PublicKey) *Reporter {
+func newReporter(stats *Stats, cfg *config, publicKey *rsa.PublicKey) (*Reporter, error) {
 	reportDuration := time.Second * time.Duration(cfg.ReportInterval)
 
 	var client HTTPDoer
@@ -193,7 +204,7 @@ func newReporter(stats *Stats, cfg *config, publicKey *rsa.PublicKey) *Reporter 
 		client = NewConcurrentLimitedClient(client, cfg.RateLimit)
 	}
 
-	return &Reporter{
+	reporter := &Reporter{
 		stats:          stats,
 		client:         client,
 		endpoint:       cfg.ServerEndpoint,
@@ -203,19 +214,14 @@ func newReporter(stats *Stats, cfg *config, publicKey *rsa.PublicKey) *Reporter 
 		hashKey:        cfg.HashKey,
 		publicKey:      publicKey,
 	}
-}
 
-func getOutboundIP(endpoint string) (net.IP, error) {
-	conn, err := net.Dial("udp", endpoint)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err := conn.Close(); err != nil {
-			log.Printf("Failed to close UDP connection: %v", err)
+	if cfg.ServerProtocol == "grpc" {
+		grpcClient, err := NewGRPCClient(cfg.ServerEndpoint)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create gRPC client: %w", err)
 		}
-	}()
+		reporter.grpcClient = grpcClient
+	}
 
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
-	return localAddr.IP, nil
+	return reporter, nil
 }
