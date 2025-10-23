@@ -1,9 +1,13 @@
 package agent
 
 import (
+	"crypto/rsa"
 	"flag"
 	"fmt"
+	"log"
+	"net"
 	"os"
+	"sync"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/etoneja/go-metrics/internal/common"
@@ -18,6 +22,47 @@ type config struct {
 	RateLimit      uint   `env:"RATE_LIMIT" json:"-"`
 	CryptoKey      string `env:"CRYPTO_KEY" json:"crypto_key"`
 	ConfigFile     string `env:"CONFIG" json:"-"`
+	publicKey      *rsa.PublicKey
+	localIP        net.IP
+	mu             sync.RWMutex
+}
+
+func (c *config) getLocalIP() net.IP {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.localIP != nil {
+		return c.localIP
+	}
+
+	ip, err := getOutboundIP(c.ServerEndpoint)
+	if err != nil {
+		log.Printf("Failed to get outbound IP: %v", err)
+		return nil
+	}
+
+	c.localIP = ip
+	return c.localIP
+}
+
+func (c *config) GetServerEndpoint() string {
+	return c.ServerEndpoint
+}
+
+func (c *config) GetServerProtocol() string {
+	return c.ServerProtocol
+}
+
+func (c *config) GetPublicKey() *rsa.PublicKey {
+	return c.publicKey
+}
+
+func (c *config) GetHashKey() string {
+	return c.HashKey
+}
+
+func (c *config) GetRateLimit() uint {
+	return c.RateLimit
 }
 
 func PrepareConfig() (*config, error) {
@@ -49,6 +94,13 @@ func PrepareConfig() (*config, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	publicKey, err := common.LoadPublicKey(cfg.CryptoKey)
+	if err != nil {
+		return nil, err
+	}
+	cfg.publicKey = publicKey
+
 	return cfg, nil
 }
 

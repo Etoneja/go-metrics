@@ -107,23 +107,23 @@ func TestGetOutboundIP(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ip, err := getOutboundIP(tt.endpoint)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("getOutboundIP() expected error, got nil")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("getOutboundIP() unexpected error: %v", err)
 				return
 			}
-			
+
 			if ip == nil {
 				t.Errorf("getOutboundIP() returned nil IP")
 			}
-			
+
 			if ip.To4() == nil && ip.To16() == nil {
 				t.Errorf("getOutboundIP() returned invalid IP: %v", ip)
 			}

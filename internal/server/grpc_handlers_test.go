@@ -113,8 +113,8 @@ func TestGRPCServer_BatchUpdate(t *testing.T) {
 		{
 			name: "successful batch update",
 			requestMetrics: []*proto.Metric{
-				{Id: "gauge1", Type: common.MetricTypeGauge, Value: float64Ptr(1.23)},
-				{Id: "counter1", Type: common.MetricTypeCounter, Delta: int64Ptr(42)},
+				{Id: "gauge1", Type: common.MetricTypeGauge, Value: common.Float64Ptr(1.23)},
+				{Id: "counter1", Type: common.MetricTypeCounter, Delta: common.Int64Ptr(42)},
 			},
 			batchUpdateFunc: func(ctx context.Context, metrics []models.MetricModel) ([]models.MetricModel, error) {
 				return metrics, nil
@@ -134,7 +134,7 @@ func TestGRPCServer_BatchUpdate(t *testing.T) {
 		{
 			name: "store batch update failed",
 			requestMetrics: []*proto.Metric{
-				{Id: "gauge1", Type: common.MetricTypeGauge, Value: float64Ptr(1.23)},
+				{Id: "gauge1", Type: common.MetricTypeGauge, Value: common.Float64Ptr(1.23)},
 			},
 			batchUpdateFunc: func(ctx context.Context, metrics []models.MetricModel) ([]models.MetricModel, error) {
 				return nil, errors.New("storage error")
@@ -145,7 +145,7 @@ func TestGRPCServer_BatchUpdate(t *testing.T) {
 		{
 			name: "conversion error on response",
 			requestMetrics: []*proto.Metric{
-				{Id: "gauge1", Type: common.MetricTypeGauge, Value: float64Ptr(1.23)},
+				{Id: "gauge1", Type: common.MetricTypeGauge, Value: common.Float64Ptr(1.23)},
 			},
 			batchUpdateFunc: func(ctx context.Context, metrics []models.MetricModel) ([]models.MetricModel, error) {
 				// Return metric with invalid type to cause conversion error
@@ -204,8 +204,8 @@ func TestGRPCServer_ListMetrics(t *testing.T) {
 			name: "successful list metrics",
 			getAllFunc: func(ctx context.Context) ([]models.MetricModel, error) {
 				return []models.MetricModel{
-					{ID: "gauge1", MType: common.MetricTypeGauge, Value: float64Ptr(1.23)},
-					{ID: "counter1", MType: common.MetricTypeCounter, Delta: int64Ptr(42)},
+					{ID: "gauge1", MType: common.MetricTypeGauge, Value: common.Float64Ptr(1.23)},
+					{ID: "counter1", MType: common.MetricTypeCounter, Delta: common.Int64Ptr(42)},
 				}, nil
 			},
 			wantErr:  false,
@@ -268,12 +268,4 @@ func TestGRPCServer_ListMetrics(t *testing.T) {
 			}
 		})
 	}
-}
-
-func float64Ptr(f float64) *float64 {
-	return &f
-}
-
-func int64Ptr(i int64) *int64 {
-	return &i
 }

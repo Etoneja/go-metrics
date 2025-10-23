@@ -6,7 +6,6 @@ import (
 	"syscall"
 
 	"github.com/etoneja/go-metrics/internal/agent"
-	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/etoneja/go-metrics/internal/version"
 	"go.uber.org/zap"
@@ -22,11 +21,6 @@ func main() {
 		logger.Get().Fatal("Failed prepare config", zap.Error(err))
 	}
 
-	publicKey, err := common.LoadPublicKey(cfg.CryptoKey)
-	if err != nil {
-		logger.Get().Fatal("Failed to load public key:", zap.Error(err))
-	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
@@ -40,7 +34,7 @@ func main() {
 		zap.String("ConfigFile", cfg.ConfigFile),
 	)
 
-	service, err := agent.NewService(cfg, publicKey)
+	service, err := agent.NewService(cfg)
 	if err != nil {
 		logger.Get().Fatal("Failed to create service:", zap.Error(err))
 	}

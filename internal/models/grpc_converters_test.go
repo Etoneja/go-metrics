@@ -20,7 +20,7 @@ func TestMetricModelToGRPC(t *testing.T) {
 			appMetric: MetricModel{
 				ID:    "gauge1",
 				MType: common.MetricTypeGauge,
-				Value: float64Ptr(1.23),
+				Value: common.Float64Ptr(1.23),
 			},
 			wantErr: false,
 		},
@@ -29,7 +29,7 @@ func TestMetricModelToGRPC(t *testing.T) {
 			appMetric: MetricModel{
 				ID:    "counter1",
 				MType: common.MetricTypeCounter,
-				Delta: int64Ptr(42),
+				Delta: common.Int64Ptr(42),
 			},
 			wantErr: false,
 		},
@@ -99,7 +99,7 @@ func TestMetricModelFromGRPC(t *testing.T) {
 			grpcMetric: &proto.Metric{
 				Id:    "gauge1",
 				Type:  common.MetricTypeGauge,
-				Value: float64Ptr(1.23),
+				Value: common.Float64Ptr(1.23),
 			},
 			wantErr:  false,
 			wantCode: codes.OK,
@@ -156,6 +156,3 @@ func TestMetricModelFromGRPC(t *testing.T) {
 		})
 	}
 }
-
-func float64Ptr(f float64) *float64 { return &f }
-func int64Ptr(i int64) *int64       { return &i }

@@ -1,149 +1,16 @@
 package agent
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
-	"crypto/rsa"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
 	"log"
-	"net"
-	"net/http"
 	"time"
-
-	"github.com/etoneja/go-metrics/internal/common"
-	"github.com/etoneja/go-metrics/internal/models"
 )
 
-func performRequest(ctx context.Context,
-	client HTTPDoer,
-	endpoint string,
-	publicKey *rsa.PublicKey,
-	hashKey string,
-	ip net.IP,
-	metrics []models.MetricModel,
-) error {
-
-	url := buildURL(endpoint, "updates/")
-
-	rawData, err := json.Marshal(metrics)
-	if err != nil {
-		return fmt.Errorf("unexpected error - failed to marshal metrics: %w", err)
-	}
-
-	var buf bytes.Buffer
-
-	gz := gzip.NewWriter(&buf)
-	_, err = gz.Write(rawData)
-	if err != nil {
-		return fmt.Errorf("unexpected error - failed to write gzip: %w", err)
-	}
-	if err = gz.Close(); err != nil {
-		return fmt.Errorf("failed to close gzip: %w", err)
-	}
-
-	method := "POST"
-	req, err := http.NewRequestWithContext(ctx, method, url, &buf)
-	if err != nil {
-		log.Printf("http.NewRequest failed: method=%s, url=%s, err=%v", method, url, err)
-		return fmt.Errorf("unexpected error - failed to create request: %w", err)
-	}
-
-	if ip != nil {
-		req.Header.Set("X-Real-IP", ip.String())
-	}
-
-	if publicKey != nil {
-		encryptedData, err := common.EncryptHybrid(publicKey, buf.Bytes())
-		if err != nil {
-			return fmt.Errorf("failed to encrypt data: %w", err)
-		}
-
-		buf.Reset()
-		buf.Write(encryptedData)
-		req.Body = io.NopCloser(&buf)
-		req.ContentLength = int64(buf.Len())
-		req.Header.Set("X-Encrypted", "true")
-	}
-
-	if hashKey != "" {
-		hash := common.ComputeHash(hashKey, buf.Bytes())
-		req.Header.Set(common.HashHeaderKey, hash)
-	}
-
-	req.Header.Set("Content-Encoding", "gzip")
-	req.Header.Set("Content-Type", "application/json")
-
-	var reqErr error
-
-	backoffSchedule := common.DefaultBackoffSchedule
-	backoffTicker := common.GetBackoffTicker(ctx, backoffSchedule)
-	attemptNum := 0
-	for range backoffTicker {
-		attemptNum++
-		attemptString := fmt.Sprintf("[%d/%d]", attemptNum, len(backoffSchedule)+1)
-
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Printf("%s failed to request %s: %v", attemptString, url, err)
-			reqErr = fmt.Errorf("failed to send request: %w", err)
-			continue
-		}
-
-		_, err = io.Copy(io.Discard, resp.Body)
-		if err != nil {
-			log.Printf("discard body error: %v", err)
-		}
-
-		if err := resp.Body.Close(); err != nil {
-			log.Printf("close body error: %v", err)
-		}
-
-		if resp.StatusCode/100 == 2 {
-			log.Printf("%s Request to %s succeeded", attemptString, url)
-			return nil
-		} else if resp.StatusCode/100 == 5 {
-			continue
-		}
-
-		log.Printf("%s bad status code for %s: %d", attemptString, url, resp.StatusCode)
-		return errors.New("bad status")
-	}
-
-	return reqErr
-
-}
-
 type Reporter struct {
-	stats          *Stats
-	iteration      uint
-	client         HTTPDoer
-	grpcClient     *GRPCClient
-	endpoint       string
-	protocol       string
-	reportInterval time.Duration
-	rateLimit      uint
-	hashKey        string
-	publicKey      *rsa.PublicKey
-	localIP        net.IP
-}
-
-func (r *Reporter) getLocalIP() net.IP {
-	if r.localIP != nil {
-		return r.localIP
-	}
-
-	ip, err := getOutboundIP(r.endpoint)
-	if err != nil {
-		log.Printf("Failed to get outbound IP: %v", err)
-		return nil
-	}
-
-	r.localIP = ip
-	return r.localIP
+	cfg          *config
+	stats        *Stats
+	iteration    uint
+	metricClient MetricClienter
 }
 
 func (r *Reporter) report(ctx context.Context) {
@@ -156,13 +23,7 @@ func (r *Reporter) report(ctx context.Context) {
 		return
 	}
 
-	var err error
-	if r.protocol == "grpc" {
-		err = r.grpcClient.PerformRequest(ctx, r.getLocalIP(), metrics)
-	} else {
-		endpoint := ensureEndpointProtocol(r.endpoint, r.protocol)
-		err = performRequest(ctx, r.client, endpoint, r.publicKey, r.hashKey, r.getLocalIP(), metrics)
-	}
+	err := r.metricClient.SendBatch(ctx, metrics)
 
 	if err != nil {
 		log.Printf("Error occurred sending metrcs %v", err)
@@ -172,16 +33,14 @@ func (r *Reporter) report(ctx context.Context) {
 }
 
 func (r *Reporter) stop() {
-	r.client.Close()
-	if r.grpcClient != nil {
-		if err := r.grpcClient.Close(); err != nil {
-			log.Printf("Failed to close gRPC client: %v", err)
-		}
+	err := r.metricClient.Close()
+	if err != nil {
+		log.Printf("Failed to close gRPC client: %v", err)
 	}
 }
 
 func (r *Reporter) runRoutine(ctx context.Context) error {
-	ticker := time.NewTicker(time.Duration(r.reportInterval))
+	ticker := time.NewTicker(time.Second * time.Duration(r.cfg.ReportInterval))
 	defer ticker.Stop()
 
 	for {
@@ -195,33 +54,10 @@ func (r *Reporter) runRoutine(ctx context.Context) error {
 	}
 }
 
-func newReporter(stats *Stats, cfg *config, publicKey *rsa.PublicKey) (*Reporter, error) {
-	reportDuration := time.Second * time.Duration(cfg.ReportInterval)
-
-	var client HTTPDoer
-	client = NewBaseClient()
-	if cfg.RateLimit > 0 {
-		client = NewConcurrentLimitedClient(client, cfg.RateLimit)
+func newReporter(stats *Stats, cfg *config, metricClient MetricClienter) *Reporter {
+	return &Reporter{
+		stats:        stats,
+		cfg:          cfg,
+		metricClient: metricClient,
 	}
-
-	reporter := &Reporter{
-		stats:          stats,
-		client:         client,
-		endpoint:       cfg.ServerEndpoint,
-		protocol:       cfg.ServerProtocol,
-		reportInterval: reportDuration,
-		rateLimit:      cfg.RateLimit,
-		hashKey:        cfg.HashKey,
-		publicKey:      publicKey,
-	}
-
-	if cfg.ServerProtocol == "grpc" {
-		grpcClient, err := NewGRPCClient(cfg.ServerEndpoint)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create gRPC client: %w", err)
-		}
-		reporter.grpcClient = grpcClient
-	}
-
-	return reporter, nil
 }

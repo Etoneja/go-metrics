@@ -1,116 +1,190 @@
+// agent/test_helpers.go
 package agent
 
 import (
 	"context"
-	"net"
+	"errors"
 	"testing"
+	"time"
 
+	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/models"
-	"github.com/etoneja/go-metrics/internal/proto"
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
-type mockMetricsServiceClient struct {
-	batchUpdateFunc func(ctx context.Context, in *proto.BatchUpdateRequest, opts ...grpc.CallOption) (*proto.BatchUpdateResponse, error)
+func CreateTestMetrics() []models.MetricModel {
+	return []models.MetricModel{
+		{ID: "cpu_usage", MType: "gauge", Value: common.Float64Ptr(95.5)},
+		{ID: "request_count", MType: "counter", Delta: common.Int64Ptr(100)},
+	}
 }
 
-func (m *mockMetricsServiceClient) BatchUpdate(ctx context.Context, in *proto.BatchUpdateRequest, opts ...grpc.CallOption) (*proto.BatchUpdateResponse, error) {
-	return m.batchUpdateFunc(ctx, in, opts...)
-}
-
-func (m *mockMetricsServiceClient) Ping(ctx context.Context, in *proto.PingRequest, opts ...grpc.CallOption) (*proto.PingResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "not implemented")
-}
-
-func (m *mockMetricsServiceClient) ListMetrics(ctx context.Context, in *proto.ListMetricsRequest, opts ...grpc.CallOption) (*proto.ListMetricsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "not implemented")
-}
-
-func TestGRPCClient_PerformRequest(t *testing.T) {
-	tests := []struct {
-		name     string
-		metrics  []models.MetricModel
-		ip       net.IP
-		mockFunc func(ctx context.Context, in *proto.BatchUpdateRequest, opts ...grpc.CallOption) (*proto.BatchUpdateResponse, error)
-		wantErr  bool
-		checkIP  bool
-	}{
-		{
-			name: "successful request",
-			metrics: []models.MetricModel{
-				{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
-			},
-			ip: net.ParseIP("192.168.1.1"),
-			mockFunc: func(ctx context.Context, in *proto.BatchUpdateRequest, opts ...grpc.CallOption) (*proto.BatchUpdateResponse, error) {
-				return &proto.BatchUpdateResponse{}, nil
-			},
-			wantErr: false,
-			checkIP: true,
-		},
-		{
-			name: "server error",
-			metrics: []models.MetricModel{
-				{ID: "test2", MType: "counter", Delta: int64Ptr(42)},
-			},
-			ip: nil,
-			mockFunc: func(ctx context.Context, in *proto.BatchUpdateRequest, opts ...grpc.CallOption) (*proto.BatchUpdateResponse, error) {
-				return nil, status.Error(codes.Internal, "internal error")
-			},
-			wantErr: true,
-			checkIP: false,
-		},
-		{
-			name: "with ip in metadata",
-			metrics: []models.MetricModel{
-				{ID: "test3", MType: "gauge", Value: float64Ptr(3.14)},
-			},
-			ip: net.ParseIP("10.0.0.1"),
-			mockFunc: func(ctx context.Context, in *proto.BatchUpdateRequest, opts ...grpc.CallOption) (*proto.BatchUpdateResponse, error) {
-				md, ok := metadata.FromOutgoingContext(ctx)
-				if !ok {
-					return nil, status.Error(codes.Internal, "no metadata")
-				}
-				ipHeaders := md.Get("x-real-ip")
-				if len(ipHeaders) == 0 || ipHeaders[0] != "10.0.0.1" {
-					return nil, status.Error(codes.Internal, "ip not found in metadata")
-				}
-				return &proto.BatchUpdateResponse{}, nil
-			},
-			wantErr: false,
-			checkIP: true,
-		},
+func TestGRPCClient_SendBatch_EmptyMetrics(t *testing.T) {
+	cfg := &mockConfig{
+		serverEndpoint: "localhost:9090",
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := &GRPCClient{
-				client: &mockMetricsServiceClient{
-					batchUpdateFunc: tt.mockFunc,
-				},
-			}
+	client := &GRPCClient{
+		cfg: cfg,
+	}
 
-			err := client.PerformRequest(context.Background(), tt.ip, tt.metrics)
+	ctx := context.Background()
+	err := client.SendBatch(ctx, []models.MetricModel{})
 
-			if tt.wantErr {
-				if err == nil {
-					t.Error("Expected error, got nil")
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
-			}
+	assert.NoError(t, err)
+}
+
+func TestGRPCClient_Close_NilConnection(t *testing.T) {
+	cfg := &mockConfig{
+		serverEndpoint: "localhost:9090",
+	}
+
+	client := &GRPCClient{
+		cfg: cfg,
+		// conn = nil
+	}
+
+	err := client.Close()
+	assert.NoError(t, err)
+}
+
+func TestShouldRetry_RetryableErrors(t *testing.T) {
+	retryableCodes := []codes.Code{
+		codes.DeadlineExceeded,
+		codes.Unavailable,
+		codes.ResourceExhausted,
+		codes.Internal,
+		codes.Unknown,
+	}
+
+	for _, code := range retryableCodes {
+		t.Run(code.String(), func(t *testing.T) {
+			err := status.Error(code, "test error")
+			result := shouldRetry(err)
+			assert.True(t, result, "code %s should be retryable", code)
 		})
 	}
 }
 
-func float64Ptr(f float64) *float64 {
-	return &f
+func TestShouldRetry_NonRetryableErrors(t *testing.T) {
+	nonRetryableCodes := []codes.Code{
+		codes.OK,
+		codes.Canceled,
+		codes.InvalidArgument,
+		codes.NotFound,
+		codes.AlreadyExists,
+		codes.PermissionDenied,
+		codes.FailedPrecondition,
+		codes.Aborted,
+		codes.OutOfRange,
+		codes.Unimplemented,
+		codes.Unauthenticated,
+	}
+
+	for _, code := range nonRetryableCodes {
+		t.Run(code.String(), func(t *testing.T) {
+			err := status.Error(code, "test error")
+			result := shouldRetry(err)
+			assert.False(t, result, "code %s should not be retryable", code)
+		})
+	}
 }
 
-func int64Ptr(i int64) *int64 {
-	return &i
+func TestShouldRetry_NonStatusError(t *testing.T) {
+	err := errors.New("regular error")
+	result := shouldRetry(err)
+	assert.False(t, result)
+}
+
+func TestShouldRetry_NilError(t *testing.T) {
+	result := shouldRetry(nil)
+	assert.False(t, result)
+}
+
+func TestRetryInterceptor_BackoffSchedule(t *testing.T) {
+
+	originalSchedule := common.DefaultBackoffSchedule
+
+	common.DefaultBackoffSchedule = []time.Duration{
+		10 * time.Millisecond,
+		20 * time.Millisecond,
+	}
+	defer func() {
+		common.DefaultBackoffSchedule = originalSchedule
+	}()
+
+	attempts := 0
+	mockInvoker := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, opts ...grpc.CallOption) error {
+		attempts++
+		return status.Error(codes.Unavailable, "service unavailable")
+	}
+
+	start := time.Now()
+	err := retryInterceptor(
+		context.Background(),
+		"testMethod",
+		nil, nil, nil,
+		mockInvoker,
+	)
+
+	elapsed := time.Since(start)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "all gRPC attempts failed")
+
+	assert.Equal(t, 2, attempts)
+
+	expectedMinTime := 10 * time.Millisecond
+	assert.GreaterOrEqual(t, elapsed, expectedMinTime)
+}
+
+func TestRetryInterceptor_SuccessOnRetry(t *testing.T) {
+	originalSchedule := common.DefaultBackoffSchedule
+	common.DefaultBackoffSchedule = []time.Duration{
+		10 * time.Millisecond,
+		20 * time.Millisecond,
+	}
+	defer func() {
+		common.DefaultBackoffSchedule = originalSchedule
+	}()
+
+	attempts := 0
+	mockInvoker := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, opts ...grpc.CallOption) error {
+		attempts++
+		if attempts < 2 {
+			return status.Error(codes.Unavailable, "service unavailable")
+		}
+		return nil
+	}
+
+	err := retryInterceptor(
+		context.Background(),
+		"testMethod",
+		nil, nil, nil,
+		mockInvoker,
+	)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 2, attempts)
+}
+
+func TestRetryInterceptor_NonRetryableError(t *testing.T) {
+	attempts := 0
+	mockInvoker := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, opts ...grpc.CallOption) error {
+		attempts++
+		return status.Error(codes.InvalidArgument, "bad request")
+	}
+
+	err := retryInterceptor(
+		context.Background(),
+		"testMethod",
+		nil, nil, nil,
+		mockInvoker,
+	)
+
+	assert.Error(t, err)
+	assert.Equal(t, 1, attempts)
 }
