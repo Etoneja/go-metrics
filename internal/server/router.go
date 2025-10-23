@@ -1,14 +1,13 @@
 package server
 
 import (
-	"crypto/rsa"
 	"net/http"
 
 	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(store Storager, hashKey string, privateKey *rsa.PrivateKey, trustedSubnet string) http.Handler {
+func NewRouter(store Storager, cfg *config) http.Handler {
 	r := chi.NewRouter()
 
 	lg := logger.Get()
@@ -16,9 +15,9 @@ func NewRouter(store Storager, hashKey string, privateKey *rsa.PrivateKey, trust
 	bmw := BaseMiddleware{logger: lg}
 
 	r.Use(bmw.LoggerMiddleware())
-	r.Use(bmw.TrustedIPMiddleware(trustedSubnet))
-	r.Use(bmw.DecryptMiddleware(privateKey))
-	r.Use(bmw.HashMiddleware(hashKey))
+	r.Use(bmw.TrustedIPMiddleware(cfg.TrustedSubnet))
+	r.Use(bmw.DecryptMiddleware(cfg.GetPrivateKey()))
+	r.Use(bmw.HashMiddleware(cfg.HashKey))
 	r.Use(bmw.GzipMiddleware())
 
 	bh := BaseHandler{store: store, logger: lg}

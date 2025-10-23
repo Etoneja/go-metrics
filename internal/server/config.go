@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/rsa"
 	"flag"
 	"fmt"
 	"net"
@@ -21,6 +22,11 @@ type config struct {
 	CryptoKey         string `env:"CRYPTO_KEY" json:"crypto_key"`
 	ConfigFile        string `env:"CONFIG" json:"-"`
 	TrustedSubnet     string `env:"TRUSTED_SUBNET" json:"trusted_subnet"`
+	privateKey        *rsa.PrivateKey
+}
+
+func (c *config) GetPrivateKey() *rsa.PrivateKey {
+	return c.privateKey
 }
 
 func PrepareConfig() (*config, error) {
@@ -54,6 +60,13 @@ func PrepareConfig() (*config, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	privateKey, err := common.LoadPrivateKey(cfg.CryptoKey)
+	if err != nil {
+		return nil, err
+	}
+	cfg.privateKey = privateKey
+
 	return cfg, nil
 }
 
