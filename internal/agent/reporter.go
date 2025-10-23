@@ -2,8 +2,10 @@ package agent
 
 import (
 	"context"
-	"log"
 	"time"
+
+	"github.com/etoneja/go-metrics/internal/logger"
+	"go.uber.org/zap"
 )
 
 type Reporter struct {
@@ -15,27 +17,30 @@ type Reporter struct {
 
 func (r *Reporter) report(ctx context.Context) {
 	r.iteration++
-	log.Println("Report - start iteration", r.iteration)
+	logger.Get().Info("Report iteration started",
+		zap.Uint("iteration", r.iteration),
+	)
 	metrics := r.stats.GetMetrics()
 
 	if len(metrics) == 0 {
-		log.Println("No metrics. Skip report")
+		logger.Get().Info("No metrics, skipping report")
 		return
 	}
 
 	err := r.metricClient.SendBatch(ctx, metrics)
-
 	if err != nil {
-		log.Printf("Error occurred sending metrcs %v", err)
+		logger.Get().Error("Error sending metrics", zap.Error(err))
 	}
 
-	log.Println("Report - finish iteration", r.iteration)
+	logger.Get().Info("Report iteration finished",
+		zap.Uint("iteration", r.iteration),
+	)
 }
 
 func (r *Reporter) stop() {
 	err := r.metricClient.Close()
 	if err != nil {
-		log.Printf("Failed to close gRPC client: %v", err)
+		logger.Get().Error("Failed to close metric client", zap.Error(err))
 	}
 }
 

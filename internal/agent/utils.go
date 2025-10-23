@@ -1,9 +1,11 @@
 package agent
 
 import (
-	"log"
 	"net"
 	"strings"
+
+	"github.com/etoneja/go-metrics/internal/logger"
+	"go.uber.org/zap"
 )
 
 func ensureEndpointProtocol(endpoint string, protocol string) string {
@@ -27,7 +29,7 @@ func getOutboundIP(endpoint string) (net.IP, error) {
 	}
 	defer func() {
 		if err := conn.Close(); err != nil {
-			log.Printf("Failed to close UDP connection: %v", err)
+			logger.Get().Error("Failed to close UDP connection", zap.Error(err))
 		}
 	}()
 

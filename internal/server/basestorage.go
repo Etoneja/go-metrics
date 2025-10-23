@@ -1,11 +1,13 @@
 package server
 
-import "log"
+import (
+	"github.com/etoneja/go-metrics/internal/logger"
+)
 
 func NewStorageFromConfig(cfg *config) Storager {
 	var store Storager
 	if cfg.DatabaseDSN == "" {
-		log.Println("Init memstorage")
+		logger.Get().Info("Init memstorage")
 		storageConfig := &StorageConfig{
 			StoreInterval:   cfg.StoreInterval,
 			FileStoragePath: cfg.FileStoragePath,
@@ -13,7 +15,7 @@ func NewStorageFromConfig(cfg *config) Storager {
 		}
 		store = NewMemStorageFromStorageConfig(storageConfig)
 	} else {
-		log.Println("Init dbstorage")
+		logger.Get().Info("Init memstorage")
 		store = NewDBStorage(cfg.DatabaseDSN)
 	}
 	return store

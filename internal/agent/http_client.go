@@ -7,13 +7,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/etoneja/go-metrics/internal/common"
+	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/etoneja/go-metrics/internal/models"
+	"go.uber.org/zap"
 )
 
 type httpMetricClient struct {
@@ -82,7 +83,7 @@ func (c *httpMetricClient) applyHeadersAndEncryption(req *http.Request, buf *byt
 	if c.cfg.GetPublicKey() != nil {
 		encryptedData, err := common.EncryptHybrid(c.cfg.GetPublicKey(), buf.Bytes())
 		if err != nil {
-			log.Printf("Encryption failed: %v", err)
+			logger.Get().Error("Encryption failed", zap.Error(err))
 			return
 		}
 
@@ -112,7 +113,10 @@ func (c *httpMetricClient) executeWithRetry(req *http.Request, buf *bytes.Buffer
 
 		resp, err := c.client.Do(req)
 		if err != nil {
-			log.Printf("Attempt %d failed: %v", attempt+1, err)
+			logger.Get().Warn("HTTP request attempt failed",
+				zap.Int("attempt", attempt+1),
+				zap.Error(err),
+			)
 			time.Sleep(backoff)
 			continue
 		}
@@ -121,10 +125,15 @@ func (c *httpMetricClient) executeWithRetry(req *http.Request, buf *bytes.Buffer
 		_ = resp.Body.Close()
 
 		if resp.StatusCode/100 == 2 {
-			log.Printf("Request succeeded after %d attempt(s)", attempt+1)
+			logger.Get().Info("HTTP request succeeded",
+				zap.Int("attempts", attempt+1),
+			)
 			return nil
 		} else if resp.StatusCode/100 == 5 {
-			log.Printf("Attempt %d: server error %d, retrying", attempt+1, resp.StatusCode)
+			logger.Get().Warn("HTTP server error, retrying",
+				zap.Int("attempt", attempt+1),
+				zap.Int("status_code", resp.StatusCode),
+			)
 			time.Sleep(backoff)
 			continue
 		}

@@ -3,12 +3,13 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/etoneja/go-metrics/internal/common"
+	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/etoneja/go-metrics/internal/models"
 	"github.com/etoneja/go-metrics/internal/proto"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -80,17 +81,26 @@ func retryInterceptor(ctx context.Context, method string, req, reply interface{}
 
 		err := invoker(ctx, method, req, reply, cc, opts...)
 		if err == nil {
-			log.Printf("%s gRPC request succeeded", attemptString)
+			logger.Get().Info("gRPC request succeeded",
+				zap.String("attempt", attemptString),
+				zap.String("method", method),
+			)
 			return nil
 		}
 
 		if shouldRetry(err) {
-			log.Printf("%s gRPC request failed, retrying: %v", attemptString, err)
+			logger.Get().Warn("gRPC request failed, retrying",
+				zap.String("attempt", attemptString),
+				zap.Error(err),
+			)
 			time.Sleep(backoff)
 			continue
 		}
 
-		log.Printf("%s gRPC request failed: %v", attemptString, err)
+		logger.Get().Error("gRPC request failed",
+			zap.String("attempt", attemptString),
+			zap.Error(err),
+		)
 		return err
 	}
 

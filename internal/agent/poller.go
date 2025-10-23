@@ -2,8 +2,10 @@ package agent
 
 import (
 	"context"
-	"log"
 	"time"
+
+	"github.com/etoneja/go-metrics/internal/logger"
+	"go.uber.org/zap"
 )
 
 type Poller struct {
@@ -14,10 +16,12 @@ type Poller struct {
 
 func (p *Poller) poll(ctx context.Context) {
 	p.iteration++
-	log.Println("Poll - start iteration", p.iteration)
+	logger.Get().Info("Poll iteration started",
+		zap.Uint("iteration", p.iteration),
+	)
 	err := p.stats.collect(ctx)
 	if err != nil {
-		log.Printf("Error while polling: %v", err)
+		logger.Get().Error("Error while polling", zap.Error(err))
 	}
 }
 

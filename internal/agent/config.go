@@ -4,13 +4,14 @@ import (
 	"crypto/rsa"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"sync"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/etoneja/go-metrics/internal/common"
+	"github.com/etoneja/go-metrics/internal/logger"
+	"go.uber.org/zap"
 )
 
 type config struct {
@@ -37,10 +38,9 @@ func (c *config) getLocalIP() net.IP {
 
 	ip, err := getOutboundIP(c.ServerEndpoint)
 	if err != nil {
-		log.Printf("Failed to get outbound IP: %v", err)
+		logger.Get().Error("Failed to get outbound IP", zap.Error(err))
 		return nil
 	}
-
 	c.localIP = ip
 	return c.localIP
 }
