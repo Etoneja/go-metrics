@@ -93,25 +93,7 @@ func main() {
 	}
 
 	// shutdown grpc
-	logger.Get().Info("Stopping gRPC server...")
-	if grpcServer != nil {
-		grpcStopped := make(chan struct{})
-		go func() {
-			grpcServer.GracefulStop()
-			close(grpcStopped)
-		}()
-
-		// wait grpc
-		select {
-		case <-grpcStopped:
-			logger.Get().Info("gRPC server stopped gracefully")
-		case <-shutdownCtx.Done():
-			logger.Get().Warn("gRPC server forced to stop")
-			grpcServer.Stop()
-		}
-	} else {
-		logger.Get().Info("gRPC server was not started")
-	}
+	server.StopGRPCServer(grpcServer, shutdownCtx)
 
 	store.ShutDown()
 	logger.Get().Info("Server(s) stopped")

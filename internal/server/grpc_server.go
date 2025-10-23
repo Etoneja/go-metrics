@@ -1,9 +1,11 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net"
 
+	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/etoneja/go-metrics/internal/proto"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -50,4 +52,25 @@ func StartGRPCServer(store Storager, logger *zap.Logger, cfg *config, serverErrC
 	}
 
 	return grpcServer, nil
+}
+
+func StopGRPCServer(grpcServer *grpc.Server, shutdownCtx context.Context) {
+	logger.Get().Info("Stopping gRPC server...")
+	if grpcServer != nil {
+		grpcStopped := make(chan struct{})
+		go func() {
+			grpcServer.GracefulStop()
+			close(grpcStopped)
+		}()
+
+		select {
+		case <-grpcStopped:
+			logger.Get().Info("gRPC server stopped gracefully")
+		case <-shutdownCtx.Done():
+			logger.Get().Warn("gRPC server forced to stop")
+			grpcServer.Stop()
+		}
+	} else {
+		logger.Get().Info("gRPC server was not started")
+	}
 }
