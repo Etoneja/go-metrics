@@ -138,8 +138,8 @@ func TestMetricUpdateHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fakeHashKey := ""
-			server := httptest.NewServer(NewRouter(tt.store, fakeHashKey, nil))
+			cfg := &config{}
+			server := httptest.NewServer(NewRouter(tt.store, cfg))
 			defer server.Close()
 
 			req, err := http.NewRequest(tt.method, server.URL+tt.uri, nil)
@@ -227,8 +227,8 @@ func TestMetricGetHandler(t *testing.T) {
 				tt.prepare(store)
 			}
 
-			fakeHashKey := ""
-			server := httptest.NewServer(NewRouter(store, fakeHashKey, nil))
+			cfg := &config{}
+			server := httptest.NewServer(NewRouter(store, cfg))
 			defer server.Close()
 
 			req, err := http.NewRequest(tt.method, server.URL+tt.uri, nil)
@@ -308,8 +308,8 @@ func TestMetricListHandler(t *testing.T) {
 				tt.prepare(store)
 			}
 
-			fakeHashKey := ""
-			server := httptest.NewServer(NewRouter(store, fakeHashKey, nil))
+			cfg := &config{}
+			server := httptest.NewServer(NewRouter(store, cfg))
 			defer server.Close()
 
 			req, err := http.NewRequest("GET", server.URL+"/", nil)
@@ -432,8 +432,8 @@ func TestMetricUpdateJSONHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := NewMemStorage()
-			fakeHashKey := ""
-			server := httptest.NewServer(NewRouter(store, fakeHashKey, nil))
+			cfg := &config{}
+			server := httptest.NewServer(NewRouter(store, cfg))
 			defer server.Close()
 
 			req, err := http.NewRequest(tt.method, server.URL+tt.uri, strings.NewReader(tt.body))
@@ -577,8 +577,8 @@ func TestMetricGetJSONHandler(t *testing.T) {
 				tt.prepare(store)
 			}
 
-			fakeHashKey := ""
-			server := httptest.NewServer(NewRouter(store, fakeHashKey, nil))
+			cfg := &config{}
+			server := httptest.NewServer(NewRouter(store, cfg))
 			defer server.Close()
 
 			req, err := http.NewRequest("POST", server.URL+"/value/", strings.NewReader(tt.body))
@@ -636,9 +636,8 @@ func TestPingHandler(t *testing.T) {
 			if tt.prepare != nil {
 				tt.prepare(store)
 			}
-
-			fakeHashKey := ""
-			server := httptest.NewServer(NewRouter(store, fakeHashKey, nil))
+			cfg := &config{}
+			server := httptest.NewServer(NewRouter(store, cfg))
 			defer server.Close()
 
 			req, err := http.NewRequest("GET", server.URL+"/ping", nil)

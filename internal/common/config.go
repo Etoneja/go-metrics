@@ -3,13 +3,14 @@ package common
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
+
+	"github.com/etoneja/go-metrics/internal/logger"
 )
 
 func LoadJSONConfig(cfg any, filePath string) error {
 	if filePath == "" {
-		log.Printf("Config file path is empty, skipping JSON config load")
+		logger.Get().Info("Config file path is empty, skipping JSON config load")
 		return nil
 	}
 	fileData, err := os.ReadFile(filePath)

@@ -5,16 +5,17 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"sort"
 	"time"
 
 	"github.com/etoneja/go-metrics/internal/common"
+	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/etoneja/go-metrics/internal/models"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 const MaxConns = 10
@@ -71,7 +72,7 @@ func NewDBStorage(connString string) *DBStorage {
 	ctx := context.Background()
 	config, err := pgxpool.ParseConfig(connString)
 	if err != nil {
-		log.Fatalf("Unable to parse config: %v", err)
+		logger.Get().Fatal("Unable to parse config", zap.Error(err))
 	}
 
 	config.MaxConns = MaxConns
@@ -92,50 +93,65 @@ func NewDBStorage(connString string) *DBStorage {
 		pool, poolErr = pgxpool.NewWithConfig(ctx, config)
 		if poolErr != nil {
 			if isDBRetryableError(poolErr) {
-				log.Printf("%s retryable error, will retry: %v", attemptString, poolErr)
+				logger.Get().Warn("retryable error, will retry",
+					zap.String("attempt", attemptString),
+					zap.Error(poolErr),
+				)
 				pool.Close()
 				continue
 			}
-			log.Fatalf("%s non-retryable error: %v", attemptString, poolErr)
+			logger.Get().Fatal("non-retryable error",
+				zap.String("attempt", attemptString),
+				zap.Error(poolErr),
+			)
 		}
 
 		poolErr = pool.Ping(ctx)
 		if poolErr != nil {
 			if isDBRetryableError(poolErr) {
-				log.Printf("%s retryable ping error, will retry: %v", attemptString, poolErr)
+				logger.Get().Warn("retryable ping error, will retry",
+					zap.String("attempt", attemptString),
+					zap.Error(poolErr),
+				)
 				pool.Close()
 				continue
 			}
-			log.Fatalf("%s non-retryable ping error: %v", attemptString, poolErr)
+			logger.Get().Fatal("non-retryable ping error",
+				zap.String("attempt", attemptString),
+				zap.Error(poolErr),
+			)
 		}
 
 		break
 	}
 
 	if poolErr != nil {
-		log.Fatalf("Failed to connect to DB after all attempts: %v", poolErr)
+		logger.Get().Fatal("Failed to connect to DB after all attempts",
+			zap.Error(poolErr),
+		)
 	}
 
 	dbs := &DBStorage{pool: pool}
 
 	err = dbs.runMigrations(ctx)
 	if err != nil {
-		log.Fatalf("Failed to apply migrations: %v", err)
+		logger.Get().Fatal("Failed to apply migrations",
+			zap.Error(err),
+		)
 	}
 	return dbs
 }
 
 func (dbs *DBStorage) runMigrations(ctx context.Context) error {
-	log.Println("runinning migrations")
+	logger.Get().Info("Running migrations")
 
 	_, err := dbs.pool.Exec(ctx, queryCreateMetricsTable)
 	if err != nil {
 		return fmt.Errorf("failed to create metrics table: %w", err)
 	}
 
-	log.Println("migrations completed successfully")
+	logger.Get().Info("Migrations completed successfully")
 	return err
-
 }
 
 func (dbs *DBStorage) GetGauge(ctx context.Context, key string) (float64, error) {
@@ -238,7 +254,7 @@ func (dbs *DBStorage) GetAll(ctx context.Context) ([]models.MetricModel, error) 
 }
 
 func (dbs *DBStorage) ShutDown() {
-	log.Println("Shutdowning db storage")
+	logger.Get().Info("Shutting down db storage")
 	dbs.pool.Close()
 }
 
@@ -262,7 +278,7 @@ func (dbs *DBStorage) BatchUpdate(ctx context.Context, metrics []models.MetricMo
 	}
 	defer func() {
 		if err = tx.Rollback(ctx); err != nil {
-			log.Printf("rollback error: %v", err)
+			logger.Get().Error("rollback error", zap.Error(err))
 		}
 	}()
 

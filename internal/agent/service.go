@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"crypto/rsa"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -14,19 +13,24 @@ type service struct {
 	reporter *Reporter
 }
 
-func NewService(cfg *config, publicKey *rsa.PublicKey) *service {
+func NewService(cfg *config) (*service, error) {
 	stats := newStats()
 
 	pollDuration := time.Second * time.Duration(cfg.PollInterval)
 	poller := newPoller(stats, pollDuration)
 
-	reporter := newReporter(stats, cfg, publicKey)
+	client, err := NewMetricClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	reporter := newReporter(stats, cfg, client)
 
 	return &service{
 		stats:    stats,
 		poller:   poller,
 		reporter: reporter,
-	}
+	}, nil
 
 }
 

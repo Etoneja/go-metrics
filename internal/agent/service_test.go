@@ -12,10 +12,14 @@ func TestNewService(t *testing.T) {
 		ReportInterval: 10,
 		RateLimit:      5,
 		ServerEndpoint: "http://localhost:8080",
+		ServerProtocol: "http",
 		HashKey:        "test-key",
 	}
 
-	service := NewService(cfg, nil)
+	service, err := NewService(cfg)
+	if err != nil {
+		t.Fatalf("Expected service instance, got error: %v", err)
+	}
 
 	if service == nil {
 		t.Fatal("Expected service instance, got nil")
@@ -43,13 +47,17 @@ func TestService_Run_ContextCancel(t *testing.T) {
 		PollInterval:   100,
 		ReportInterval: 100,
 		ServerEndpoint: "http://test",
+		ServerProtocol: "http",
 	}
-	service := NewService(cfg, nil)
+	service, err := NewService(cfg)
+	if err != nil {
+		t.Fatalf("Expected service instance, got error: %v", err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := service.Run(ctx)
+	err = service.Run(ctx)
 	if err != context.Canceled {
 		t.Errorf("Expected context canceled, got %v", err)
 	}

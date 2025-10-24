@@ -1,14 +1,7 @@
 package agent
 
 import (
-	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"errors"
-	"io"
-	"net/http"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,285 +9,271 @@ import (
 	"github.com/etoneja/go-metrics/internal/common"
 	"github.com/etoneja/go-metrics/internal/models"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-type mockClient struct {
-	mu       *sync.Mutex
-	requests []*http.Request
-	doFunc   func(req *http.Request) (*http.Response, error)
+type mockMetricClient struct {
+	mu             sync.Mutex
+	sendBatchCalls []struct {
+		ctx     context.Context
+		metrics []models.MetricModel
+	}
+	closeCalls     int
+	sendBatchError error
 }
 
-func (m *mockClient) Do(req *http.Request) (*http.Response, error) {
+func (m *mockMetricClient) SendBatch(ctx context.Context, metrics []models.MetricModel) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.requests = append(m.requests, req)
 
-	if m.doFunc != nil {
-		return m.doFunc(req)
-	}
+	m.sendBatchCalls = append(m.sendBatchCalls, struct {
+		ctx     context.Context
+		metrics []models.MetricModel
+	}{ctx, metrics})
 
-	return &http.Response{
-		StatusCode: 200,
-		Body:       io.NopCloser(strings.NewReader("fake")),
-	}, nil
+	return m.sendBatchError
 }
 
-func (m *mockClient) Close() {}
+func (m *mockMetricClient) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-func TestReporter_report(t *testing.T) {
-	fakeReportInterval := time.Duration(time.Millisecond)
-	fakeEndpoint := "http://fake.com/"
-	stats := newStats()
+	m.closeCalls++
+	return nil
+}
 
-	mockCli := &mockClient{mu: &sync.Mutex{}}
-	t.Run("test report", func(t *testing.T) {
-		r := &Reporter{
-			stats:          stats,
-			client:         mockCli,
-			endpoint:       fakeEndpoint,
-			reportInterval: fakeReportInterval,
+type testCollector struct {
+	metrics []models.MetricModel
+	err     error
+	delay   time.Duration
+}
+
+func (t *testCollector) Collect(ctx context.Context, resultCh chan<- Result) {
+	if t.delay > 0 {
+		select {
+		case <-time.After(t.delay):
+		case <-ctx.Done():
+			return
 		}
-		assert.Equal(t, uint(0), r.iteration)
+	}
 
-		ctx := context.Background()
+	if t.err != nil {
+		select {
+		case <-ctx.Done():
+			return
+		case resultCh <- Result{err: t.err}:
+		}
+	} else {
+		for _, metric := range t.metrics {
+			select {
+			case <-ctx.Done():
+				return
+			case resultCh <- Result{metric: metric}:
+			}
+		}
+	}
+}
 
-		// stats not collected
-		r.report(ctx)
+func testMetrics() []models.MetricModel {
+	return []models.MetricModel{
+		{ID: "test1", MType: "gauge", Value: common.Float64Ptr(1.23)},
+		{ID: "test2", MType: "counter", Delta: common.Int64Ptr(42)},
+	}
+}
 
-		assert.Equal(t, uint(1), r.iteration)
-		assert.Equal(t, 0, len(mockCli.requests))
+func TestReporter_WithRealStats(t *testing.T) {
+	t.Run("report with collected metrics", func(t *testing.T) {
+		mockClient := &mockMetricClient{}
 
-		err := stats.collect(ctx)
-		if err != nil {
-			t.Fatalf("Unexpected err: %v", err)
+		stats := &Stats{
+			mu: &sync.RWMutex{},
+			collectors: []Collecter{
+				&testCollector{metrics: testMetrics()},
+			},
 		}
 
-		// stats collected
-		r.report(ctx)
+		cfg := &config{ReportInterval: 10}
+		reporter := newReporter(stats, cfg, mockClient)
 
-		assert.Equal(t, 1, len(mockCli.requests))
+		err := stats.collect(context.Background())
+		require.NoError(t, err)
 
-		req := mockCli.requests[0]
-		assert.Equal(t, req.URL.Path, "/updates/")
-		assert.Equal(t, http.MethodPost, req.Method)
+		reporter.report(context.Background())
+
+		assert.Equal(t, uint(1), reporter.iteration)
+		assert.Equal(t, 1, len(mockClient.sendBatchCalls))
+		assert.Equal(t, testMetrics(), mockClient.sendBatchCalls[0].metrics)
 	})
 
+	t.Run("report without collection - no metrics", func(t *testing.T) {
+		mockClient := &mockMetricClient{}
+
+		stats := &Stats{
+			mu:         &sync.RWMutex{},
+			collectors: []Collecter{&testCollector{metrics: testMetrics()}},
+		}
+
+		reporter := newReporter(stats, &config{ReportInterval: 10}, mockClient)
+
+		reporter.report(context.Background())
+
+		assert.Equal(t, uint(1), reporter.iteration)
+		assert.Equal(t, 0, len(mockClient.sendBatchCalls))
+	})
+
+	t.Run("stats collection error", func(t *testing.T) {
+		mockClient := &mockMetricClient{}
+
+		stats := &Stats{
+			mu:         &sync.RWMutex{},
+			collectors: []Collecter{&testCollector{err: assert.AnError}},
+		}
+
+		reporter := newReporter(stats, &config{ReportInterval: 10}, mockClient)
+
+		err := stats.collect(context.Background())
+		require.Error(t, err)
+
+		metrics := stats.GetMetrics()
+		assert.Empty(t, metrics)
+
+		reporter.report(context.Background())
+
+		assert.Equal(t, uint(1), reporter.iteration)
+		assert.Equal(t, 0, len(mockClient.sendBatchCalls))
+	})
 }
 
-func TestNewReporter(t *testing.T) {
-	stats := &Stats{}
-	endpoint := "http://localhost:8080"
-	reportInterval := 10 * time.Second
-	rateLimit := uint(5)
-	hashKey := "test-key"
+func TestReporter_WithRealCollectors(t *testing.T) {
+	t.Run("using real anyCollector", func(t *testing.T) {
+		mockClient := &mockMetricClient{}
 
-	cfg := &config{
-		ServerEndpoint: endpoint,
-		ReportInterval: 10,
-		RateLimit:      rateLimit,
-		HashKey:        hashKey,
-	}
+		stats := &Stats{
+			mu:         &sync.RWMutex{},
+			collectors: []Collecter{NewAnyCollector()},
+		}
 
-	reporter := newReporter(stats, cfg, nil)
+		reporter := newReporter(stats, &config{ReportInterval: 10}, mockClient)
 
-	if reporter == nil {
-		t.Fatal("Expected reporter instance, got nil")
-	}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
 
-	if reporter.stats != stats {
-		t.Error("Stats not set correctly")
-	}
+		err := stats.collect(ctx)
+		require.NoError(t, err)
 
-	if reporter.endpoint != endpoint {
-		t.Errorf("Expected endpoint %s, got %s", endpoint, reporter.endpoint)
-	}
+		metrics := stats.GetMetrics()
+		require.NotEmpty(t, metrics)
 
-	if reporter.reportInterval != reportInterval {
-		t.Errorf("Expected report interval %v, got %v", reportInterval, reporter.reportInterval)
-	}
+		metricNames := make(map[string]bool)
+		for _, metric := range metrics {
+			metricNames[metric.ID] = true
+		}
 
-	if reporter.rateLimit != rateLimit {
-		t.Errorf("Expected rate limit %d, got %d", rateLimit, reporter.rateLimit)
-	}
+		assert.True(t, metricNames["RandomValue"])
+		assert.True(t, metricNames["PollCount"])
 
-	if reporter.hashKey != hashKey {
-		t.Errorf("Expected hash key %s, got %s", hashKey, reporter.hashKey)
-	}
+		reporter.report(context.Background())
 
-	if reporter.client == nil {
-		t.Error("Client should be initialized")
-	}
-}
+		assert.Equal(t, uint(1), reporter.iteration)
+		assert.Equal(t, 1, len(mockClient.sendBatchCalls))
+		assert.Equal(t, metrics, mockClient.sendBatchCalls[0].metrics)
+	})
 
-func TestPerformRequest_Success(t *testing.T) {
-	client := &mockClient{mu: &sync.Mutex{}}
-	metrics := []models.MetricModel{
-		*models.NewMetricModel("test", common.MetricTypeGauge, 0, float64(1.0)),
-	}
+	t.Run("using real memCollector", func(t *testing.T) {
+		mockClient := &mockMetricClient{}
 
-	err := performRequest(context.Background(), client, "http://test", nil, "", metrics)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-}
+		stats := &Stats{
+			mu:         &sync.RWMutex{},
+			collectors: []Collecter{NewMemCollector()},
+		}
 
-func TestPerformRequest_WithHash(t *testing.T) {
-	client := &mockClient{mu: &sync.Mutex{}}
-	metrics := []models.MetricModel{
-		*models.NewMetricModel("test", common.MetricTypeGauge, 0, float64(1.0)),
-	}
+		reporter := newReporter(stats, &config{ReportInterval: 10}, mockClient)
 
-	err := performRequest(context.Background(), client, "http://test", nil, "secret", metrics)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
+		err := stats.collect(context.Background())
+		require.NoError(t, err)
 
-	if len(client.requests) == 0 {
-		t.Fatal("No requests made")
-	}
+		metrics := stats.GetMetrics()
+		require.NotEmpty(t, metrics)
 
-	hash := client.requests[0].Header.Get(common.HashHeaderKey)
-	if hash == "" {
-		t.Error("Hash header not set")
-	}
-}
-
-func TestPerformRequest_WithEncryption(t *testing.T) {
-	client := &mockClient{mu: &sync.Mutex{}}
-
-	// Генерируем нормальный RSA ключ (2048 бит вместо 512)
-	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("Failed to generate key: %v", err)
-	}
-
-	metrics := []models.MetricModel{
-		*models.NewMetricModel("test", common.MetricTypeGauge, 0, float64(1.0)),
-	}
-
-	err = performRequest(context.Background(), client, "http://test", &privKey.PublicKey, "", metrics)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-
-	if len(client.requests) == 0 {
-		t.Fatal("No requests made")
-	}
-
-	encryptedFlag := client.requests[0].Header.Get("X-Encrypted")
-	if encryptedFlag != "true" {
-		t.Error("X-Encrypted header not set")
-	}
-}
-
-func TestPerformRequest_5xxRetry(t *testing.T) {
-	originalBackoff := common.DefaultBackoffSchedule
-	common.DefaultBackoffSchedule = []time.Duration{1 * time.Millisecond, 1 * time.Millisecond}
-	defer func() { common.DefaultBackoffSchedule = originalBackoff }()
-
-	attempts := 0
-	client := &mockClient{
-		mu: &sync.Mutex{},
-		doFunc: func(req *http.Request) (*http.Response, error) {
-			attempts++
-			if attempts < 3 {
-				return &http.Response{
-					StatusCode: 500,
-					Body:       io.NopCloser(bytes.NewReader(nil)),
-				}, nil
+		hasMemMetric := false
+		for _, metric := range metrics {
+			if metric.ID == "Alloc" || metric.ID == "HeapAlloc" {
+				hasMemMetric = true
+				break
 			}
-			return &http.Response{
-				StatusCode: 200,
-				Body:       io.NopCloser(bytes.NewReader(nil)),
-			}, nil
-		},
-	}
+		}
+		assert.True(t, hasMemMetric)
 
-	metrics := []models.MetricModel{
-		*models.NewMetricModel("test", common.MetricTypeGauge, 0, float64(1.0)),
-	}
+		reporter.report(context.Background())
 
-	err := performRequest(context.Background(), client, "http://test", nil, "", metrics)
-	if err != nil {
-		t.Errorf("Unexpected error after retry: %v", err)
-	}
-	if attempts != 3 {
-		t.Errorf("Expected 3 attempts, got %d", attempts)
-	}
+		assert.Equal(t, 1, len(mockClient.sendBatchCalls))
+	})
 }
 
-func TestPerformRequest_4xxError(t *testing.T) {
-	client := &mockClient{
-		mu: &sync.Mutex{},
-		doFunc: func(req *http.Request) (*http.Response, error) {
-			return &http.Response{
-				StatusCode: 400,
-				Body:       io.NopCloser(bytes.NewReader(nil)),
-			}, nil
-		},
-	}
+func TestReporter_RunRoutineWithRealStats(t *testing.T) {
+	t.Run("periodic reporting with real stats", func(t *testing.T) {
+		mockClient := &mockMetricClient{}
 
-	metrics := []models.MetricModel{
-		*models.NewMetricModel("test", common.MetricTypeGauge, 0, float64(1.0)),
-	}
+		stats := &Stats{
+			mu:         &sync.RWMutex{},
+			collectors: []Collecter{NewAnyCollector()},
+		}
 
-	err := performRequest(context.Background(), client, "http://test", nil, "", metrics)
-	if err == nil {
-		t.Error("Expected error for 4xx status")
-	}
+		cfg := &config{ReportInterval: 1} // 1 second
+		reporter := newReporter(stats, cfg, mockClient)
+
+		err := stats.collect(context.Background())
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
+		defer cancel()
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- reporter.runRoutine(ctx)
+		}()
+
+		time.Sleep(2200 * time.Millisecond)
+		cancel()
+
+		err = <-errCh
+		require.Error(t, err)
+
+		assert.GreaterOrEqual(t, len(mockClient.sendBatchCalls), 2)
+		assert.GreaterOrEqual(t, reporter.iteration, uint(2))
+	})
 }
 
-func TestPerformRequest_NetworkErrorWithRetry(t *testing.T) {
-	originalBackoff := common.DefaultBackoffSchedule
-	common.DefaultBackoffSchedule = []time.Duration{1 * time.Millisecond, 1 * time.Millisecond}
-	defer func() { common.DefaultBackoffSchedule = originalBackoff }()
+func TestReporter_Integration(t *testing.T) {
+	t.Run("full flow with all real collectors", func(t *testing.T) {
+		mockClient := &mockMetricClient{}
 
-	attempts := 0
-	client := &mockClient{
-		mu: &sync.Mutex{},
-		doFunc: func(req *http.Request) (*http.Response, error) {
-			attempts++
-			if attempts < 2 {
-				return nil, errors.New("network error")
-			}
-			return &http.Response{
-				StatusCode: 200,
-				Body:       io.NopCloser(bytes.NewReader(nil)),
-			}, nil
-		},
-	}
+		stats := newStats()
 
-	metrics := []models.MetricModel{
-		*models.NewMetricModel("test", common.MetricTypeGauge, 0, float64(1.0)),
-	}
+		cfg := &config{ReportInterval: 10}
+		reporter := newReporter(stats, cfg, mockClient)
 
-	err := performRequest(context.Background(), client, "http://test", nil, "", metrics)
-	if err != nil {
-		t.Errorf("Unexpected error after retry: %v", err)
-	}
-	if attempts != 2 {
-		t.Errorf("Expected 2 attempts, got %d", attempts)
-	}
-}
+		err := stats.collect(context.Background())
+		require.NoError(t, err)
 
-func TestPerformRequest_AllAttemptsFail(t *testing.T) {
-	originalBackoff := common.DefaultBackoffSchedule
-	common.DefaultBackoffSchedule = []time.Duration{1 * time.Millisecond, 1 * time.Millisecond}
-	defer func() { common.DefaultBackoffSchedule = originalBackoff }()
+		initialMetrics := stats.GetMetrics()
+		require.NotEmpty(t, initialMetrics)
 
-	client := &mockClient{
-		mu: &sync.Mutex{},
-		doFunc: func(req *http.Request) (*http.Response, error) {
-			return nil, errors.New("persistent network error")
-		},
-	}
+		reporter.report(context.Background())
 
-	metrics := []models.MetricModel{
-		*models.NewMetricModel("test", common.MetricTypeGauge, 0, float64(1.0)),
-	}
+		assert.Equal(t, 1, len(mockClient.sendBatchCalls))
+		sentMetrics := mockClient.sendBatchCalls[0].metrics
+		assert.Equal(t, len(initialMetrics), len(sentMetrics))
 
-	err := performRequest(context.Background(), client, "http://test", nil, "", metrics)
-	if err == nil {
-		t.Error("Expected error after all attempts failed")
-	}
+		initialMap := make(map[string]models.MetricModel)
+		for _, m := range initialMetrics {
+			initialMap[m.ID] = m
+		}
+
+		for _, sent := range sentMetrics {
+			initial, exists := initialMap[sent.ID]
+			assert.True(t, exists)
+			assert.Equal(t, initial.MType, sent.MType)
+		}
+	})
 }

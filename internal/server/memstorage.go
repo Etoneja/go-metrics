@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"sort"
 	"sync"
@@ -14,7 +13,9 @@ import (
 	"maps"
 
 	"github.com/etoneja/go-metrics/internal/common"
+	"github.com/etoneja/go-metrics/internal/logger"
 	"github.com/etoneja/go-metrics/internal/models"
+	"go.uber.org/zap"
 )
 
 type MemStorage struct {
@@ -56,7 +57,7 @@ func NewMemStorageFromStorageConfig(sc *StorageConfig) *MemStorage {
 	if sc.Restore {
 		err := ms.load()
 		if err != nil {
-			log.Printf("Error occurred: %v", err)
+			logger.Get().Error("Error occurred during restore", zap.Error(err))
 		}
 	}
 
@@ -207,12 +208,15 @@ func (ms *MemStorage) dump() error {
 
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
-			log.Printf("warning: failed to close temp file: %v", closeErr)
+			logger.Get().Warn("failed to close temp file", zap.Error(closeErr))
 		}
 
 		if err != nil {
 			if removeErr := os.Remove(tmpPath); removeErr != nil && !os.IsNotExist(removeErr) {
-				log.Printf("warning: failed to remove temp file %s: %v", tmpPath, removeErr)
+				logger.Get().Warn("failed to remove temp file",
+					zap.String("path", tmpPath),
+					zap.Error(removeErr),
+				)
 			}
 		}
 	}()
@@ -235,7 +239,7 @@ func (ms *MemStorage) dump() error {
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
 
-	log.Println("Data dumped successfully")
+	logger.Get().Info("Data dumped successfully")
 
 	return nil
 }
@@ -250,7 +254,7 @@ func (ms *MemStorage) load() error {
 	}
 	defer func() {
 		if err = file.Close(); err != nil {
-			log.Printf("failed to close file: %v", err)
+			logger.Get().Error("failed to close file", zap.Error(err))
 		}
 	}()
 
@@ -262,7 +266,7 @@ func (ms *MemStorage) load() error {
 		return err
 	}
 
-	log.Printf("Load %d entries", len(metrics))
+	logger.Get().Info("Loaded entries", zap.Int("count", len(metrics)))
 
 	for _, m := range metrics {
 		switch m.MType {
@@ -275,7 +279,10 @@ func (ms *MemStorage) load() error {
 		}
 	}
 
-	log.Printf("Load %d gauges, %d counters", len(ms.gauge), len(ms.counter))
+	logger.Get().Info("Loaded metrics",
+		zap.Int("gauges", len(ms.gauge)),
+		zap.Int("counters", len(ms.counter)),
+	)
 
 	return nil
 }
@@ -291,17 +298,16 @@ func (ms *MemStorage) startPeriodicDump(period uint) {
 			case <-ticker.C:
 				err := ms.Dump()
 				if err != nil {
-					log.Printf("Error occurred: %v", err)
+					logger.Get().Error("Dump error", zap.Error(err))
 				}
 			case <-ms.stopChan:
 				defer close(ms.doneChan)
 				err := ms.Dump()
 				if err != nil {
-					log.Printf("Error occurred: %v", err)
+					logger.Get().Error("Final dump error", zap.Error(err))
 				}
 				return
 			}
-
 		}
 	}()
 
@@ -312,17 +318,17 @@ func (ms *MemStorage) ShutDown() {
 		return
 	}
 
-	log.Println("MemStorage shutdowning...")
+	logger.Get().Info("MemStorage shutting down...")
 	if ms.syncDump {
 		for ms.dumpInProgress.Load() {
-			log.Println("Dump in progress. Waiting...")
+			logger.Get().Info("Dump in progress. Waiting...")
 			time.Sleep(1 * time.Second)
 		}
 	} else {
 		close(ms.stopChan)
 		<-ms.doneChan
 	}
-	log.Println("MemStorage shutdowned")
+	logger.Get().Info("MemStorage shutdown completed")
 }
 
 func (ms *MemStorage) Ping(ctx context.Context) error {

@@ -6,29 +6,6 @@ import (
 	"testing"
 )
 
-// TestNormalizeConfig tests the endpoint URL normalization
-func TestNormalizeConfig(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{"no_protocol", "localhost:8080", "http://localhost:8080"},
-		{"has_http", "http://server:8080", "http://server:8080"},
-		{"has_https", "https://server:8080", "https://server:8080"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &config{ServerEndpoint: tt.input}
-			normalizeConfig(cfg)
-			if cfg.ServerEndpoint != tt.expected {
-				t.Errorf("normalizeConfig(%s) = %s, want %s", tt.input, cfg.ServerEndpoint, tt.expected)
-			}
-		})
-	}
-}
-
 // TestPrepareConfigIntegration tests the complete config preparation with flags and env
 func TestPrepareConfigIntegration(t *testing.T) {
 	// Set environment variables

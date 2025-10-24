@@ -85,3 +85,48 @@ func TestBuildURL(t *testing.T) {
 		})
 	}
 }
+
+func TestGetOutboundIP(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint string
+		wantErr  bool
+	}{
+		{
+			name:     "valid endpoint",
+			endpoint: "8.8.8.8:80",
+			wantErr:  false,
+		},
+		{
+			name:     "invalid endpoint",
+			endpoint: "invalid:99999",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ip, err := getOutboundIP(tt.endpoint)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("getOutboundIP() expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("getOutboundIP() unexpected error: %v", err)
+				return
+			}
+
+			if ip == nil {
+				t.Errorf("getOutboundIP() returned nil IP")
+			}
+
+			if ip.To4() == nil && ip.To16() == nil {
+				t.Errorf("getOutboundIP() returned invalid IP: %v", ip)
+			}
+		})
+	}
+}
